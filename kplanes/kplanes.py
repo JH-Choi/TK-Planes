@@ -204,7 +204,7 @@ class KPlanesModel(Model):
         for conv_idx in range(len(self.config.multiscale_res)):
             curr_dim = self.config.grid_feature_dim            
             curr_seq = torch.nn.Sequential()
-            curr_seq.append(torch.nn.Conv2d(curr_dim,curr_dim,3,1,0,padding_mode='replicate',bias=False))
+            curr_seq.append(torch.nn.Conv2d(curr_dim,curr_dim,5,1,0,padding_mode='replicate',bias=False))
             for conv_jdx in range(start_layers + conv_idx):
                 next_dim = int(curr_dim*curr_dim_mult)
                 #curr_seq.append(torch.nn.InstanceNorm2d(curr_dim))                
@@ -696,7 +696,7 @@ class KPlanesModel(Model):
             
             if self.conv_train_bool:
                 loss_dict["vol_tvs"] = self.vol_tv_mult*(vol_tvs / (3*len(outputs_lst)))
-                loss_dict["temporal_simm"] = self.conv_vol_tv_mult*temporal_simm / (3*len(outputs_lst))                
+                loss_dict["temporal_simm"] = 0.1*self.conv_vol_tv_mult*temporal_simm / (3*len(outputs_lst))                
             else:
                 loss_dict["conv_mlp"] = conv_mlp / (6*len(outputs_lst))
             
