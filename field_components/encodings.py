@@ -676,8 +676,8 @@ class KPlanesEncoding(Encoding):
         self.output_head = nn.Sequential(
             nn.Linear(self.num_components*2 + 3, self.num_components*4, bias=bias_bool),
             #nn.LayerNorm(self.num_components*4),
-            #nn.ReLU(),
-            #nn.Linear(self.num_components*4, self.num_components*4, bias=bias_bool),
+            nn.ReLU(),
+            nn.Linear(self.num_components*4, self.num_components*4, bias=bias_bool),
             #nn.LayerNorm(self.num_components*4),            
             #nn.ReLU(),
             #nn.Linear(self.num_components*4, self.num_components*4, bias=bias_bool),
@@ -775,18 +775,18 @@ class KPlanesEncoding(Encoding):
         #xz_tx_tz = proc_func(outputs[1])*(1 - xz_gate) + xz_gate*proc_func(outputs[2][:,:self.num_components]*outputs[5][:,:self.num_components])
         #yz_ty_tz = proc_func(outputs[3])*(1 - yz_gate) + yz_gate*proc_func(outputs[4][:,:self.num_components]*outputs[5][:,:self.num_components])
 
-        if time_mask is None:
+        if time_mask is None:# and False:
             #xy_tx_ty = self.proc_func(outputs[0] + outputs[2][:,:self.num_components]*outputs[4][:,:self.num_components])
             #xz_tx_tz = self.proc_func(outputs[1] + outputs[2][:,:self.num_components]*outputs[5][:,:self.num_components])
             #yz_ty_tz = self.proc_func(outputs[3] + outputs[4][:,:self.num_components]*outputs[5][:,:self.num_components])
 
             xyz_static = outputs[0]*outputs[1]*outputs[3]
             xyz_temporal = (outputs[2][:,:self.num_components]*
-                            #outputs[2][:,:self.num_components]*outputs[4][:,:self.num_components]*outputs[5][:,:self.num_components]*
+                            #outputs[2][:,:self.num_components]*outputs[4][:,:self.num_components]*outputs[5][:,:self.num_components]*                      
                                      outputs[4][:,:self.num_components]*
                                      outputs[5][:,:self.num_components]*
                                      outputs[6]*outputs[7]*outputs[8])
-
+            #output = outputs[0]*outputs[1]*outputs[3]*outputs[2][:,:self.num_components]*outputs[4][:,:self.num_components]*outputs[5][:,:self.num_components]
             '''
             xy_tx_ty = self.proc_func((1 - xy_gate)*outputs[0] +
                                       xy_gate*outputs[2][:,:self.num_components]*
@@ -815,6 +815,15 @@ class KPlanesEncoding(Encoding):
                                       outputs[5][:,:self.num_components]*
                                       outputs[8][:,:self.num_components])            
             '''
+        #elif True:
+        #    time_mask = time_mask.reshape(-1,1)            
+        #    xyz_static = self.mask_layer(outputs[0]*outputs[1]*outputs[3],~time_mask)
+        #    xyz_temporal = self.mask_layer(outputs[2][:,:self.num_components]*
+        #                                   outputs[4][:,:self.num_components]*
+        #                                   outputs[5][:,:self.num_components],time_mask)            
+            #output = (outputs[0]*outputs[1]*outputs[3]*
+            #          outputs[2][:,:self.num_components]*outputs[4][:,:self.num_components]*outputs[5][:,:self.num_components])
+        #    output = xyz_static * xyz_temporal
         else:
             time_mask = time_mask.reshape(-1,1)
             
@@ -926,12 +935,12 @@ class KPlanesEncoding(Encoding):
 
         #sig_func = torch.sigmoid
         #sig_func = torch.nn.Identity()
-        output = self.proc_func(self.output_head(torch.cat([static_mask*F.normalize(xyz_static),dynamic_mask*F.normalize(xyz_temporal),
+        #output = self.proc_func(self.output_head(torch.cat([static_mask*F.normalize(xyz_static),dynamic_mask*F.normalize(xyz_temporal),
         #output = self.proc_func(self.output_head(torch.cat([F.normalize(xyz_static),F.normalize(xyz_temporal),
-        #output = self.proc_func(self.output_head(torch.cat([xyz_static,xyz_temporal,
-                                                            torch.sigmoid(outputs[2][:,self.num_components:]),
-                                                            torch.sigmoid(outputs[4][:,self.num_components:]),
-                                                            torch.sigmoid(outputs[5][:,self.num_components:])],dim=-1)))
+        output = self.proc_func(self.output_head(torch.cat([xyz_static,xyz_temporal,
+                                                            outputs[2][:,self.num_components:],
+                                                            outputs[4][:,self.num_components:],
+                                                            outputs[5][:,self.num_components:]],dim=-1)))
         
         #output = ((outputs[0] + tx_ty) *
         #          (outputs[1] + tx_tz) *
