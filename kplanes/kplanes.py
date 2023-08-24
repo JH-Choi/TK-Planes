@@ -472,7 +472,7 @@ class KPlanesModel(Model):
         #exit(-1)
         red_image = torch.ones_like(image)
         red_image[:,1:3] = 0
-        image = image*(1 - image_mask) + red_image*image_mask
+        #image = image*(1 - image_mask) + red_image*image_mask
         #image = (1 - image_mask) + red_image*image_mask        
         loss_dict = {"rgb": self.rgb_loss(image, outputs["rgb"])}
         #loss_dict = {"rgb": self.rgb_loss(self.field.masks*image, outputs["rgb"])}        
