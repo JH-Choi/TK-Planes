@@ -202,34 +202,39 @@ class KPlanesModel(Model):
         start_layers = 3
         curr_dim_mult = 2
         for conv_idx in range(len(self.config.multiscale_res)):
-            curr_dim = self.config.grid_feature_dim            
-            curr_seq = torch.nn.Sequential()
-            curr_seq.append(torch.nn.Conv2d(curr_dim,curr_dim,3,1,0,padding_mode='replicate',bias=False))
-            for conv_jdx in range(start_layers + conv_idx):
-                next_dim = int(curr_dim*curr_dim_mult)
-                #curr_seq.append(torch.nn.InstanceNorm2d(curr_dim))                
-                curr_seq.append(torch.nn.ReLU())
-                curr_seq.append(torch.nn.Conv2d(curr_dim,next_dim,3,2,0,padding_mode='replicate',bias=False))
-                #curr_seq.append(torch.nn.InstanceNorm2d(next_dim))      
-                curr_seq.append(torch.nn.ReLU())
-                curr_seq.append(torch.nn.Conv2d(next_dim,next_dim,3,1,0,padding_mode='replicate',bias=False))
-                curr_dim = next_dim
+            curr_conv_comp = torch.nn.ModuleList([])
+            curr_conv_mlp = torch.nn.ModuleList([])
+            for _ in range(3):
+                curr_dim = self.config.grid_feature_dim       
+                curr_seq = torch.nn.Sequential()
+                curr_seq.append(torch.nn.Conv2d(curr_dim,curr_dim,3,1,0,padding_mode='replicate',bias=False))
+                for conv_jdx in range(start_layers):# + conv_idx):
+                    next_dim = int(curr_dim*curr_dim_mult)
+                    #curr_seq.append(torch.nn.InstanceNorm2d(curr_dim))                
+                    curr_seq.append(torch.nn.ReLU())
+                    curr_seq.append(torch.nn.Conv2d(curr_dim,next_dim,3,2,0,padding_mode='replicate',bias=False))
+                    #curr_seq.append(torch.nn.InstanceNorm2d(next_dim))      
+                    curr_seq.append(torch.nn.ReLU())
+                    curr_seq.append(torch.nn.Conv2d(next_dim,next_dim,3,1,0,padding_mode='replicate',bias=False))
+                    curr_dim = next_dim
 
-            self.conv_comp.append(curr_seq)
-            curr_mlp_seq = torch.nn.Sequential()
-            curr_mlp_seq.append(torch.nn.Dropout(0.3))
+                curr_conv_comp.append(curr_seq)
+                curr_mlp_seq = torch.nn.Sequential()
+                #curr_mlp_seq.append(torch.nn.Dropout(0.3))
 
-            for conv_jdx in range(start_layers + conv_idx):
-                next_dim = int(curr_dim / curr_dim_mult)
-                curr_mlp_seq.append(torch.nn.Linear(curr_dim, next_dim, bias=False))
-                #curr_mlp_seq.append(torch.nn.LayerNorm(next_dim))
-                curr_mlp_seq.append(torch.nn.ReLU())
-                curr_dim = next_dim
+                for conv_jdx in range(start_layers):# + conv_idx):
+                    next_dim = int(curr_dim / curr_dim_mult)
+                    curr_mlp_seq.append(torch.nn.Linear(curr_dim, next_dim, bias=False))
+                    #curr_mlp_seq.append(torch.nn.LayerNorm(next_dim))
+                    curr_mlp_seq.append(torch.nn.ReLU())
+                    curr_dim = next_dim
                 
-            curr_mlp_seq.append(torch.nn.Linear(curr_dim, 2,bias=False))
-            curr_mlp_seq.append(torch.nn.Softmax(1))
-            
-            self.conv_mlp.append(curr_mlp_seq)
+                curr_mlp_seq.append(torch.nn.Linear(curr_dim, 2,bias=False))
+                curr_mlp_seq.append(torch.nn.Softmax(1))
+                curr_conv_mlp.append(curr_mlp_seq)
+                
+            self.conv_mlp.append(curr_conv_mlp)
+            self.conv_comp.append(curr_conv_comp)
         
         #self.conj = torch.nn.Parameter(torch.tensor([[1,-1,-1,-1]]),requires_grad=False)
         #self.quat = torch.nn.Parameter(torch.tensor([[1.0,0.0,0.0,0.0]]))
@@ -544,7 +549,7 @@ class KPlanesModel(Model):
                 #g24mlp = self.conv_comp(g24.detach())
                 if not self.conv_train_bool:
                     g24 = g24.detach()                
-                g24 = self.conv_comp[grid_idx](g24)
+                g24 = self.conv_comp[grid_idx][0](g24)
 
                 g24c, g24h, g24w = g24.shape
                 #g24 = g24.reshape(g24c, (g24h // reshape_num),reshape_num, (g24w // reshape_num),reshape_num)
@@ -565,7 +570,7 @@ class KPlanesModel(Model):
                 #g25mlp = self.conv_comp(g25.detach())
                 if not self.conv_train_bool:
                     g25 = g25.detach()
-                g25 = self.conv_comp[grid_idx](g25)                
+                g25 = self.conv_comp[grid_idx][1](g25)                
                 g25c, g25h, g25w = g25.shape
                 #g25 = g25.reshape(g25c, (g25h // reshape_num),reshape_num, (g25w // reshape_num),reshape_num)
                 #g25 = g25.permute(0,1,3,2,4)
@@ -585,7 +590,7 @@ class KPlanesModel(Model):
                 #g45mlp = self.conv_comp(g45.detach())
                 if not self.conv_train_bool:
                     g45 = g45.detach()
-                g45 = self.conv_comp[grid_idx](g45)     
+                g45 = self.conv_comp[grid_idx][2](g45)     
                 g45c, g45h, g45w = g45.shape
                 #g45 = g45.reshape(g45c, (g45h // reshape_num),reshape_num, (g45w // reshape_num),reshape_num)
                 #g45 = g45.permute(0,1,3,2,4)
@@ -599,9 +604,9 @@ class KPlanesModel(Model):
                 #if self.conv_train_bool:
 
                 if not self.conv_train_bool:
-                    mlp24 = self.conv_mlp[grid_idx](g24.transpose(-1,-2))
-                    mlp25 = self.conv_mlp[grid_idx](g25.transpose(-1,-2))
-                    mlp45 = self.conv_mlp[grid_idx](g45.transpose(-1,-2))
+                    mlp24 = self.conv_mlp[grid_idx][0](g24.transpose(-1,-2))
+                    mlp25 = self.conv_mlp[grid_idx][1](g25.transpose(-1,-2))
+                    mlp45 = self.conv_mlp[grid_idx][2](g45.transpose(-1,-2))
                     conv_mlp += self.conv_mlp_loss(mlp24,torch.ones_like(mlp24))
                     conv_mlp += self.conv_mlp_loss(mlp25,torch.ones_like(mlp25))
                     conv_mlp += self.conv_mlp_loss(mlp45,torch.ones_like(mlp45))
@@ -618,7 +623,7 @@ class KPlanesModel(Model):
                 #g0mlp = self.conv_comp(g0.detach())
                 if not self.conv_train_bool:
                     g0 = g0.detach()
-                g0 = self.conv_comp[grid_idx](g0)                
+                g0 = self.conv_comp[grid_idx][0](g0)                
                 g0c,g0h,g0w = g0.shape
                 #g0 = g0.reshape(g0c, (g0h // reshape_num),reshape_num, (g0w // reshape_num),reshape_num)
                 #g0 = g0.permute(0,1,3,2,4)
@@ -633,7 +638,7 @@ class KPlanesModel(Model):
                 if not self.conv_train_bool:
                     g1 = g1.detach()                
                 #g1mlp = self.conv_comp(g1.detach())
-                g1 = self.conv_comp[grid_idx](g1)                
+                g1 = self.conv_comp[grid_idx][1](g1)                
                 g1c,g1h,g1w = g1.shape
                 #g1 = g1.reshape(g1c, (g1h // reshape_num),reshape_num, (g1w // reshape_num),reshape_num)
                 #g1 = g1.permute(0,1,3,2,4)
@@ -648,7 +653,7 @@ class KPlanesModel(Model):
                 if not self.conv_train_bool:
                     g3 = g3.detach()                
                 #g3mlp = self.conv_comp(g3.detach())
-                g3 = self.conv_comp[grid_idx](g3)                
+                g3 = self.conv_comp[grid_idx][2](g3)                
                 g3c,g3h,g3w = g3.shape
                 #g3 = g3.reshape(g3c, (g3h // reshape_num),reshape_num, (g3w // reshape_num),reshape_num)
                 #g3 = g3.permute(0,1,3,2,4)
@@ -663,9 +668,9 @@ class KPlanesModel(Model):
                 g8 = g45
 
                 if not self.conv_train_bool:
-                    mlp0 = self.conv_mlp[grid_idx](g0.transpose(-1,-2))
-                    mlp1 = self.conv_mlp[grid_idx](g1.transpose(-1,-2))
-                    mlp3 = self.conv_mlp[grid_idx](g3.transpose(-1,-2))
+                    mlp0 = self.conv_mlp[grid_idx][0](g0.transpose(-1,-2))
+                    mlp1 = self.conv_mlp[grid_idx][1](g1.transpose(-1,-2))
+                    mlp3 = self.conv_mlp[grid_idx][2](g3.transpose(-1,-2))
                     conv_mlp += self.conv_mlp_loss(mlp0,torch.zeros_like(mlp0))
                     conv_mlp += self.conv_mlp_loss(mlp1,torch.zeros_like(mlp1))
                     conv_mlp += self.conv_mlp_loss(mlp3,torch.zeros_like(mlp3))                                              
