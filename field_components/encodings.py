@@ -782,7 +782,7 @@ class KPlanesEncoding(Encoding):
 
             xyz_static = outputs[0]*outputs[1]*outputs[3]
             xyz_temporal = (outputs[2][:,:self.num_components]*
-                            #outputs[2][:,:self.num_components]*outputs[4][:,:self.num_components]*outputs[5][:,:self.num_components]*                      
+                            outputs[2][:,:self.num_components]*outputs[4][:,:self.num_components]*outputs[5][:,:self.num_components]*                      
                                      outputs[4][:,:self.num_components]*
                                      outputs[5][:,:self.num_components]*
                                      outputs[6]*outputs[7]*outputs[8])
@@ -861,7 +861,7 @@ class KPlanesEncoding(Encoding):
             #static_mask = torch.clip(torch.randint(0,5,(xyz_static.shape[0] // num_ray_samps,1)),0,1).to(xyz_static.device)
             xyz_temporal = self.mask_layer(outputs[2][:,:self.num_components]*outputs[4][:,:self.num_components]*
             #xyz_temporal = (outputs[2][:,:self.num_components]*outputs[4][:,:self.num_components]*                                           
-                                           #outputs[4][:,:self.num_components]*outputs[5][:,:self.num_components]*outputs[2][:,:self.num_components]*
+                                           outputs[4][:,:self.num_components]*outputs[5][:,:self.num_components]*outputs[2][:,:self.num_components]*
                                            outputs[5][:,:self.num_components]*#outputs[2][:,:self.num_components]*
                                            #outputs[6]*outputs[7]*outputs[8])
                                            outputs[6]*outputs[7]*outputs[8],time_mask)                                           
@@ -873,7 +873,7 @@ class KPlanesEncoding(Encoding):
             #xyz_static = (xyz_static.reshape(static_mask.shape[0],num_ray_samps,-1) * static_mask.unsqueeze(-1)).reshape(-1,xyz_static.shape[-1])
             #xyz_temporal = (xyz_temporal.reshape(dynamic_mask.shape[0],num_ray_samps,-1) * dynamic_mask.unsqueeze(-1)).reshape(-1,xyz_temporal.shape[-1])
             
-            if self.print_idx % 100 == 0 and self.plane_coefs[0].shape[0] > 16 and self.plane_coefs[0].shape[-1] >= 256:
+            if self.print_idx % 1000 == 0 and self.plane_coefs[0].shape[0] > 16 and self.plane_coefs[0].shape[-1] >= 256:
                 for idx in [0,1,2,3,4,5,6,7,8]:
                     grid = self.plane_coefs[idx].detach().cpu().numpy()
                     sub_grid_min = np.min(grid)
@@ -903,7 +903,7 @@ class KPlanesEncoding(Encoding):
                         #                       cv2.FONT_HERSHEY_SIMPLEX,0.55,(0,0,0),2)
                         cv2.imwrite("/home/cmaxey/grid_imgs/sub_grid_{}{}_{}_{}x{}.png".format(idx,kdx,jdx,reso_x,reso_y),sub_grid)                        
 
-            self.print_idx = (self.print_idx + 1) % 100
+            self.print_idx = (self.print_idx + 1) % 1000
             #xy_tx_ty = proc_func(~time_mask*outputs[0] + time_mask*outputs[2]*outputs[4])
             #xz_tx_tz = proc_func(~time_mask*outputs[1] + time_mask*outputs[2]*outputs[5])
             #yz_ty_tz = proc_func(~time_mask*outputs[3] + time_mask*outputs[4]*outputs[5])            

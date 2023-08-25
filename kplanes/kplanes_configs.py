@@ -127,7 +127,7 @@ kplanes_dynamic_method = MethodSpecification(
             datamanager=VanillaDataManagerConfig(
                 dataparser=OkutamaDataParserConfig(),
                 #dataparser=DNeRFDataParserConfig(),                                
-                train_num_rays_per_batch=4196 + 256, #8192,
+                train_num_rays_per_batch=4196 + 512, #8192,
                 eval_num_rays_per_batch=8,
                 camera_res_scale_factor=0.5,  # DNeRF train on 400x400
             ),
