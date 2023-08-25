@@ -455,7 +455,19 @@ class KPlanesModel(Model):
                 time_mask_loss += self.rgb_loss((_outputs[4][:,num_comps:]).reshape(-1,48,1),time_mask_alt)
                 time_mask_loss += self.rgb_loss((_outputs[5][:,num_comps:]).reshape(-1,48,1),time_mask_alt)
 
+            field_grids = [g.plane_coefs for g in self.field.grids]
+            grid_norm = 0.0
+            for grid_idx,grids in enumerate(field_grids):
+                grid_norm += torch.abs(1 - torch.norm(grids[0],2,0)).mean()
+                grid_norm += torch.abs(1 - torch.norm(grids[1],2,0)).mean()
+                grid_norm += torch.abs(1 - torch.norm(grids[3],2,0)).mean()
+                #grid_norm += torch.abs(1 - torch.norm(grids[6],2,0)).mean()
+                #grid_norm += torch.abs(1 - torch.norm(grids[7],2,0)).mean()
+                #grid_norm += torch.abs(1 - torch.norm(grids[8],2,0)).mean()
+
+                
             loss_dict["time_masks"] = time_mask_loss
+            loss_dict["grid_norm"] = 0.1*grid_norm/ (3*len(outputs_lst))
             
         return loss_dict
 
