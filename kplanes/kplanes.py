@@ -467,7 +467,7 @@ class KPlanesModel(Model):
 
                 
             loss_dict["time_masks"] = time_mask_loss
-            loss_dict["grid_norm"] = 0.1*grid_norm/ (3*len(outputs_lst))
+            loss_dict["grid_norm"] = 0.01*grid_norm/ (6*len(outputs_lst))
             
         return loss_dict
 
