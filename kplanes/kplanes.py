@@ -455,7 +455,7 @@ class KPlanesModel(Model):
                 time_mask_loss += self.rgb_loss((_outputs[4][:,num_comps:]).reshape(-1,48,1),time_mask_alt)
                 time_mask_loss += self.rgb_loss((_outputs[5][:,num_comps:]).reshape(-1,48,1),time_mask_alt)
 
-            loss_dict["time_masks"] = time_mask_loss
+            loss_dict["time_masks"] = 0.1*time_mask_loss
             
         return loss_dict
 
