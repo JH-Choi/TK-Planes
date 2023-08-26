@@ -516,9 +516,9 @@ class KPlanesModel(Model):
                 local_vol_tvs += torch.abs(self.similarity_loss(_outputs[3],_outputs[4][:,:num_comps]*_outputs[5][:,:num_comps]*_outputs[8])).mean()
                 
             for grid_idx,grids in enumerate(field_grids):
-                grid_norm += torch.norm(grids[0],2,0).mean()
-                grid_norm += torch.norm(grids[1],2,0).mean()
-                grid_norm += torch.norm(grids[3],2,0).mean()
+                grid_norm += torch.abs(1 - torch.norm(grids[0],2,0)).mean()
+                grid_norm += torch.abs(1 - torch.norm(grids[1],2,0)).mean()
+                grid_norm += torch.abs(1 - torch.norm(grids[3],2,0)).mean()
                 #grid_norm += torch.norm(grids[6],2,0).mean()
                 #grid_norm += torch.norm(grids[7],2,0).mean()
                 #grid_norm += torch.norm(grids[8],2,0).mean()                
@@ -702,7 +702,7 @@ class KPlanesModel(Model):
                 loss_dict["conv_mlp"] = conv_mlp / (6*len(outputs_lst))
             
             loss_dict["local_vol_tvs"] = 0.01*local_vol_tvs / (3*len(outputs_lst))
-            loss_dict["grid_norm"] = 0.1*torch.abs(grid_norm - 1) / (6*len(outputs_lst))
+            loss_dict["grid_norm"] = 0.1*grid_norm / (3*len(outputs_lst))
             
             loss_dict["time_masks"] = time_mask_loss
             
