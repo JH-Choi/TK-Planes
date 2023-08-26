@@ -637,9 +637,9 @@ class KPlanesEncoding(Encoding):
             )
         has_time_planes = self.in_dim == 4
 
-        #self.proc_func = torch.nn.Identity()
+        self.proc_func = torch.nn.Identity()
         #self.proc_func = torch.nn.Tanh()
-        self.proc_func = F.normalize        
+        #self.proc_func = F.normalize        
         self.print_idx = 0
         self.mask_layer = LimitGradLayer.apply
         self.coo_combs = list(itertools.combinations(range(self.in_dim), 2))
@@ -676,8 +676,8 @@ class KPlanesEncoding(Encoding):
         self.output_head = nn.Sequential(
             nn.Linear(self.num_components*2 + 3, self.num_components*4, bias=bias_bool),
             #nn.LayerNorm(self.num_components*4),
-            nn.ReLU(),
-            nn.Linear(self.num_components*4, self.num_components*4, bias=bias_bool),
+            #nn.ReLU(),
+            #nn.Linear(self.num_components*4, self.num_components*4, bias=bias_bool),
             #nn.LayerNorm(self.num_components*4),            
             #nn.ReLU(),
             #nn.Linear(self.num_components*4, self.num_components*4, bias=bias_bool),

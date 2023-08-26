@@ -199,13 +199,13 @@ class KPlanesModel(Model):
         self.conv_train_idx = 0
         self.conv_comp = torch.nn.ModuleList([])
         self.conv_mlp = torch.nn.ModuleList([])
-        start_layers = 3
+        start_layers = 4
         curr_dim_mult = 2
         for conv_idx in range(len(self.config.multiscale_res)):
             curr_dim = self.config.grid_feature_dim            
             curr_seq = torch.nn.Sequential()
             curr_seq.append(torch.nn.Conv2d(curr_dim,curr_dim,3,1,1,padding_mode='replicate',bias=False))
-            for conv_jdx in range(start_layers + 2*conv_idx):
+            for conv_jdx in range(start_layers):# + 2*conv_idx):
                 next_dim = int(curr_dim*curr_dim_mult)
                 #curr_seq.append(torch.nn.InstanceNorm2d(curr_dim))                
                 curr_seq.append(torch.nn.ReLU())
@@ -217,9 +217,9 @@ class KPlanesModel(Model):
 
             self.conv_comp.append(curr_seq)
             curr_mlp_seq = torch.nn.Sequential()
-            curr_mlp_seq.append(torch.nn.Dropout(0.3))
+            #curr_mlp_seq.append(torch.nn.Dropout(0.3))
 
-            for conv_jdx in range(start_layers + 2*conv_idx):
+            for conv_jdx in range(start_layers):# + 2*conv_idx):
                 next_dim = int(curr_dim / curr_dim_mult)
                 curr_mlp_seq.append(torch.nn.Linear(curr_dim, next_dim, bias=False))
                 #curr_mlp_seq.append(torch.nn.LayerNorm(next_dim))
@@ -230,9 +230,6 @@ class KPlanesModel(Model):
             curr_mlp_seq.append(torch.nn.Softmax(1))
             
             self.conv_mlp.append(curr_mlp_seq)
-        
-        #self.conj = torch.nn.Parameter(torch.tensor([[1,-1,-1,-1]]),requires_grad=False)
-        #self.quat = torch.nn.Parameter(torch.tensor([[1.0,0.0,0.0,0.0]]))
         
         self.density_fns = []
         num_prop_nets = self.config.num_proposal_iterations
@@ -673,12 +670,12 @@ class KPlanesModel(Model):
                 grid_norm += torch.abs(1 - torch.norm(grids[0],2,0)).mean()
                 grid_norm += torch.abs(1 - torch.norm(grids[1],2,0)).mean()
                 grid_norm += torch.abs(1 - torch.norm(grids[3],2,0)).mean()
-                grid_norm += torch.abs(1 - torch.norm(g6,2,0)).mean()
-                grid_norm += torch.abs(1 - torch.norm(g7,2,0)).mean()
-                grid_norm += torch.abs(1 - torch.norm(g8,2,0)).mean()
+                #grid_norm += torch.abs(1 - torch.norm(g6,2,0)).mean()
+                #grid_norm += torch.abs(1 - torch.norm(g7,2,0)).mean()
+                #grid_norm += torch.abs(1 - torch.norm(g8,2,0)).mean()
                 
             if self.cosine_idx % 3000 == 0:
-                self.vol_tv_mult = np.clip(self.vol_tv_mult * 2,0,0.01)
+                self.vol_tv_mult = np.clip(self.vol_tv_mult * 2,0,0.1)
                 self.conv_vol_tv_mult = np.clip(self.conv_vol_tv_mult*2,0,0.005)
             
             if self.conv_train_bool:
@@ -689,7 +686,7 @@ class KPlanesModel(Model):
             
             loss_dict["grid_norm"] = 0.01*grid_norm / (3*len(outputs_lst))
             
-            loss_dict["time_masks"] = time_mask_loss
+            loss_dict["time_masks"] = 0.1*time_mask_loss
             
         return loss_dict
 
