@@ -507,22 +507,8 @@ class KPlanesModel(Model):
                         param.requires_grad = self.conv_train_bool
                         
                 self.conv_train_bool = not self.conv_train_bool
-
-                
-            for _outputs in outputs_lst:
-                #continue
-                local_vol_tvs += torch.abs(self.similarity_loss(_outputs[0],_outputs[2][:,:num_comps]*_outputs[4][:,:num_comps]*_outputs[6])).mean()
-                local_vol_tvs += torch.abs(self.similarity_loss(_outputs[1],_outputs[2][:,:num_comps]*_outputs[5][:,:num_comps]*_outputs[7])).mean()
-                local_vol_tvs += torch.abs(self.similarity_loss(_outputs[3],_outputs[4][:,:num_comps]*_outputs[5][:,:num_comps]*_outputs[8])).mean()
                 
             for grid_idx,grids in enumerate(field_grids):
-                grid_norm += torch.abs(1 - torch.norm(grids[0],2,0)).mean()
-                grid_norm += torch.abs(1 - torch.norm(grids[1],2,0)).mean()
-                grid_norm += torch.abs(1 - torch.norm(grids[3],2,0)).mean()
-                #grid_norm += torch.norm(grids[6],2,0).mean()
-                #grid_norm += torch.norm(grids[7],2,0).mean()
-                #grid_norm += torch.norm(grids[8],2,0).mean()                
-                
                 #continue
                 g2 = grids[2]                
                 g4 = grids[4]
@@ -612,10 +598,10 @@ class KPlanesModel(Model):
                     conv_mlp += self.conv_mlp_loss(mlp24,torch.ones_like(mlp24))
                     conv_mlp += self.conv_mlp_loss(mlp25,torch.ones_like(mlp25))
                     conv_mlp += self.conv_mlp_loss(mlp45,torch.ones_like(mlp45))
-                #else:
-                #    temporal_simm += -self.grid_similarity_loss(g24,g24).mean()
-                #    temporal_simm += -self.grid_similarity_loss(g25,g25).mean()
-                #    temporal_simm += -self.grid_similarity_loss(g45,g45).mean()
+                else:
+                    temporal_simm += -self.grid_similarity_loss(g24,g24).mean()
+                    temporal_simm += -self.grid_similarity_loss(g25,g25).mean()
+                    temporal_simm += -self.grid_similarity_loss(g45,g45).mean()
 
 
                 c,h,w = grids[0].shape
@@ -683,25 +669,24 @@ class KPlanesModel(Model):
                                                
 
                 reshape_num *= 2
-                
-                #vol_tvs += torch.abs(torch.matmul(grids[1].reshape(c,-1).transpose(-1,-2),grids[7].reshape(c,-1))).mean()
-                #vol_tvs += torch.abs(torch.matmul(grids[3].reshape(c,-1).transpose(-1,-2),grids[8].reshape(c,-1))).mean()                
-                
-                #vol_tvs += torch.abs(self.grid_similarity_loss(grids[0],grids[6])).mean()
-                #vol_tvs += torch.abs(self.grid_similarity_loss(grids[1],grids[7])).mean()
-                #vol_tvs += torch.abs(self.grid_similarity_loss(grids[3],grids[8])).mean()
 
+                grid_norm += torch.abs(1 - torch.norm(grids[0],2,0)).mean()
+                grid_norm += torch.abs(1 - torch.norm(grids[1],2,0)).mean()
+                grid_norm += torch.abs(1 - torch.norm(grids[3],2,0)).mean()
+                grid_norm += torch.abs(1 - torch.norm(grids[6],2,0)).mean()
+                grid_norm += torch.abs(1 - torch.norm(grids[7],2,0)).mean()
+                grid_norm += torch.abs(1 - torch.norm(grids[8],2,0)).mean()
+                
             if self.cosine_idx % 3000 == 0:
                 self.vol_tv_mult = np.clip(self.vol_tv_mult * 2,0,0.01)
                 self.conv_vol_tv_mult = np.clip(self.conv_vol_tv_mult*2,0,0.005)
             
             if self.conv_train_bool:
                 loss_dict["vol_tvs"] = self.vol_tv_mult*(vol_tvs / (3*len(outputs_lst)))
-                #loss_dict["temporal_simm"] = self.conv_vol_tv_mult*temporal_simm / (3*len(outputs_lst))                
+                loss_dict["temporal_simm"] = self.conv_vol_tv_mult*temporal_simm / (3*len(outputs_lst))                
             else:
                 loss_dict["conv_mlp"] = conv_mlp / (6*len(outputs_lst))
             
-            loss_dict["local_vol_tvs"] = 0.01*local_vol_tvs / (3*len(outputs_lst))
             loss_dict["grid_norm"] = 0.1*grid_norm / (3*len(outputs_lst))
             
             loss_dict["time_masks"] = time_mask_loss
