@@ -673,9 +673,9 @@ class KPlanesModel(Model):
                 grid_norm += torch.abs(1 - torch.norm(grids[0],2,0)).mean()
                 grid_norm += torch.abs(1 - torch.norm(grids[1],2,0)).mean()
                 grid_norm += torch.abs(1 - torch.norm(grids[3],2,0)).mean()
-                grid_norm += torch.abs(1 - torch.norm(grids[6],2,0)).mean()
-                grid_norm += torch.abs(1 - torch.norm(grids[7],2,0)).mean()
-                grid_norm += torch.abs(1 - torch.norm(grids[8],2,0)).mean()
+                grid_norm += torch.abs(1 - torch.norm(g6,2,0)).mean()
+                grid_norm += torch.abs(1 - torch.norm(g7,2,0)).mean()
+                grid_norm += torch.abs(1 - torch.norm(g8,2,0)).mean()
                 
             if self.cosine_idx % 3000 == 0:
                 self.vol_tv_mult = np.clip(self.vol_tv_mult * 2,0,0.01)
@@ -687,7 +687,7 @@ class KPlanesModel(Model):
             else:
                 loss_dict["conv_mlp"] = conv_mlp / (6*len(outputs_lst))
             
-            loss_dict["grid_norm"] = 0.1*grid_norm / (3*len(outputs_lst))
+            loss_dict["grid_norm"] = 0.01*grid_norm / (3*len(outputs_lst))
             
             loss_dict["time_masks"] = time_mask_loss
             
