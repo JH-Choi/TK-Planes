@@ -503,9 +503,12 @@ class KPlanesModel(Model):
                 
             for _outputs in outputs_lst:
                 #continue
-                local_vol_tvs += torch.abs(self.similarity_loss(_outputs[0],_outputs[2][:,:num_comps]*_outputs[4][:,:num_comps]*_outputs[6])).mean()
-                local_vol_tvs += torch.abs(self.similarity_loss(_outputs[1],_outputs[2][:,:num_comps]*_outputs[5][:,:num_comps]*_outputs[7])).mean()
-                local_vol_tvs += torch.abs(self.similarity_loss(_outputs[3],_outputs[4][:,:num_comps]*_outputs[5][:,:num_comps]*_outputs[8])).mean()
+                #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[0],_outputs[2][:,:num_comps]*_outputs[4][:,:num_comps]*_outputs[6])).mean()
+                #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[1],_outputs[2][:,:num_comps]*_outputs[5][:,:num_comps]*_outputs[7])).mean()
+                #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[3],_outputs[4][:,:num_comps]*_outputs[5][:,:num_comps]*_outputs[8])).mean()
+                local_vol_tvs += torch.abs(self.similarity_loss(_outputs[0],_outputs[6])).mean()
+                local_vol_tvs += torch.abs(self.similarity_loss(_outputs[1],_outputs[7])).mean()
+                local_vol_tvs += torch.abs(self.similarity_loss(_outputs[3],_outputs[8])).mean() 
                 
             for grid_idx,grids in enumerate(field_grids):
                 grid_norm += torch.abs(1 - torch.norm(grids[0],2,0)).mean()
