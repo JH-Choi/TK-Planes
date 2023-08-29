@@ -637,9 +637,9 @@ class KPlanesEncoding(Encoding):
             )
         has_time_planes = self.in_dim == 4
 
-        #self.proc_func = torch.nn.Identity()
+        self.proc_func = torch.nn.Identity()
         #self.proc_func = torch.nn.Tanh()
-        self.proc_func = F.normalize        
+        #self.proc_func = F.normalize        
         self.print_idx = 0
         self.mask_layer = LimitGradLayer.apply
         self.coo_combs = list(itertools.combinations(range(self.in_dim), 2))
@@ -674,38 +674,16 @@ class KPlanesEncoding(Encoding):
 
         bias_bool = False
         self.output_head = nn.Sequential(
-            nn.Linear(self.num_components*2 + 3, self.num_components*4, bias=bias_bool),
+            nn.Linear(self.num_components*2 + 3, self.num_components*3, bias=bias_bool),
             #nn.LayerNorm(self.num_components*4),
             nn.ReLU(),
-            nn.Linear(self.num_components*4, self.num_components*4, bias=bias_bool),
+            nn.Linear(self.num_components*3, self.num_components*3, bias=bias_bool),
             #nn.LayerNorm(self.num_components*4),            
             #nn.ReLU(),
             #nn.Linear(self.num_components*4, self.num_components*4, bias=bias_bool),
             #nn.LayerNorm(self.num_components*4),
             nn.ReLU(),            
-            nn.Linear(self.num_components*4, self.num_components, bias=bias_bool))
-        #self.time_freq_conv = nn.ModuleList([
-        #    nn.Sequential(
-        #        nn.Conv2d(num_components,2*num_components,3,1,padding=1,bias=False,dtype=torch.complex64),
-                #ComplexAct(nn.functional.relu),
-                #nn.InstanceNorm2d(2*num_components),
-                #nn.ReLU(),
-        #        ComplexAct(nn.functional.relu),                
-        #        nn.Conv2d(2*num_components,2*num_components,3,1,padding=1,bias=False,dtype=torch.complex64),
-                #nn.InstanceNorm2d(2*num_components),
-        #        ComplexAct(nn.functional.relu),
-                #nn.ReLU(),
-        #        nn.Conv2d(2*num_components,num_components,3,1,padding=1,bias=False,dtype=torch.complex64))])
-            #nn.Sequential(
-            #    nn.Conv2d(num_components,2*num_components,3,1,padding=1), #,dtype=torch.complex64),
-                #ComplexAct(nn.functional.relu),
-            #    nn.ReLU(),
-            #    nn.Conv2d(2*num_components,num_components,3,1,padding=1)), #,dtype=torch.complex64)),
-            #nn.Sequential(
-            #    nn.Conv2d(num_components,2*num_components,3,1,padding=1), #,dtype=torch.complex64),
-                #ComplexAct(nn.functional.relu),
-            #    nn.ReLU(),
-            #    nn.Conv2d(2*num_components,num_components,3,1,padding=1))]) #,dtype=torch.complex64))])            
+            nn.Linear(self.num_components*3, self.num_components, bias=bias_bool))
 
     def get_out_dim(self) -> int:
         return self.num_components
@@ -759,103 +737,16 @@ class KPlanesEncoding(Encoding):
 
         vol_tv = 0.0
 
-        #THIS CURRENT VERSION
-        #xy_gate = (torch.sigmoid(outputs[2][:,self.num_components:]*outputs[4][:,self.num_components:]) > 0.5).type(outputs[2].type())
-        #xz_gate = (torch.sigmoid(outputs[2][:,self.num_components:]*outputs[5][:,self.num_components:]) > 0.5).type(outputs[2].type())
-        #yz_gate = (torch.sigmoid(outputs[4][:,self.num_components:]*outputs[5][:,self.num_components:]) > 0.5).type(outputs[2].type())
-
-        #all_gate = (torch.sigmoid(outputs[2][:,self.num_components:]*
-        #                          outputs[4][:,self.num_components:]*
-        #                          outputs[5][:,self.num_components:]) > 0.5)#.type(outputs[2].type())
-        
-        #self.proc_func = torch.nn.Tanh()
-        #self.proc_func = F.normalize
-        
-        #xy_tx_ty = proc_func(outputs[0])*(1 - xy_gate) + xy_gate*proc_func(outputs[2][:,:self.num_components]*outputs[4][:,:self.num_components])
-        #xz_tx_tz = proc_func(outputs[1])*(1 - xz_gate) + xz_gate*proc_func(outputs[2][:,:self.num_components]*outputs[5][:,:self.num_components])
-        #yz_ty_tz = proc_func(outputs[3])*(1 - yz_gate) + yz_gate*proc_func(outputs[4][:,:self.num_components]*outputs[5][:,:self.num_components])
-
         if time_mask is None:# and False:
-            #xy_tx_ty = self.proc_func(outputs[0] + outputs[2][:,:self.num_components]*outputs[4][:,:self.num_components])
-            #xz_tx_tz = self.proc_func(outputs[1] + outputs[2][:,:self.num_components]*outputs[5][:,:self.num_components])
-            #yz_ty_tz = self.proc_func(outputs[3] + outputs[4][:,:self.num_components]*outputs[5][:,:self.num_components])
-
             xyz_static = outputs[0]*outputs[1]*outputs[3]
             xyz_temporal = (outputs[2][:,:self.num_components]*
                             outputs[2][:,:self.num_components]*outputs[4][:,:self.num_components]*outputs[5][:,:self.num_components]*                      
                                      outputs[4][:,:self.num_components]*
                                      outputs[5][:,:self.num_components]*
                                      outputs[6]*outputs[7]*outputs[8])
-            #output = outputs[0]*outputs[1]*outputs[3]*outputs[2][:,:self.num_components]*outputs[4][:,:self.num_components]*outputs[5][:,:self.num_components]
-            '''
-            xy_tx_ty = self.proc_func((1 - xy_gate)*outputs[0] +
-                                      xy_gate*outputs[2][:,:self.num_components]*
-                                      outputs[4][:,:self.num_components]*
-                                      outputs[6][:,:self.num_components])
-            xz_tx_tz = self.proc_func((1 - xz_gate)*outputs[1] +
-                                      xz_gate*outputs[2][:,:self.num_components]*
-                                      outputs[5][:,:self.num_components]*
-                                      outputs[7][:,:self.num_components])
-            yz_ty_tz = self.proc_func((1 - yz_gate)*outputs[3] +
-                                      yz_gate*outputs[4][:,:self.num_components]*
-                                      outputs[5][:,:self.num_components]*
-                                      outputs[8][:,:self.num_components])
-            '''
-            '''
-            xy_tx_ty = self.proc_func(outputs[0] +
-                                      outputs[2][:,:self.num_components]*
-                                      outputs[4][:,:self.num_components]*
-                                      outputs[6][:,:self.num_components])
-            xz_tx_tz = self.proc_func(outputs[1] +
-                                      outputs[2][:,:self.num_components]*
-                                      outputs[5][:,:self.num_components]*
-                                      outputs[7][:,:self.num_components])
-            yz_ty_tz = self.proc_func(outputs[3] +
-                                      outputs[4][:,:self.num_components]*
-                                      outputs[5][:,:self.num_components]*
-                                      outputs[8][:,:self.num_components])            
-            '''
-        #elif True:
-        #    time_mask = time_mask.reshape(-1,1)            
-        #    xyz_static = self.mask_layer(outputs[0]*outputs[1]*outputs[3],~time_mask)
-        #    xyz_temporal = self.mask_layer(outputs[2][:,:self.num_components]*
-        #                                   outputs[4][:,:self.num_components]*
-        #                                   outputs[5][:,:self.num_components],time_mask)            
-            #output = (outputs[0]*outputs[1]*outputs[3]*
-            #          outputs[2][:,:self.num_components]*outputs[4][:,:self.num_components]*outputs[5][:,:self.num_components])
-        #    output = xyz_static * xyz_temporal
         else:
             time_mask = time_mask.reshape(-1,1)
             
-            '''
-            xy_tx_ty = self.proc_func(outputs[0] +
-                                      outputs[2][:,:self.num_components]*
-                                      outputs[4][:,:self.num_components]*
-                                      outputs[6][:,:self.num_components])
-            xz_tx_tz = self.proc_func(outputs[1] +
-                                      outputs[2][:,:self.num_components]*
-                                      outputs[5][:,:self.num_components]*
-                                      outputs[7][:,:self.num_components])
-            yz_ty_tz = self.proc_func(outputs[3] +
-                                      outputs[4][:,:self.num_components]*
-                                      outputs[5][:,:self.num_components]*
-                                      outputs[8][:,:self.num_components])
-
-            '''
-            '''
-            xy_tx_ty = self.proc_func(~time_mask*outputs[0] +
-                                      time_mask*outputs[2][:,:self.num_components]*
-                                      outputs[4][:,:self.num_components]*
-                                      outputs[6][:,:self.num_components])
-            xz_tx_tz = self.proc_func(~time_mask*outputs[1] +
-                                      time_mask*outputs[2][:,:self.num_components]*
-                                      outputs[5][:,:self.num_components]*
-                                      outputs[7][:,:self.num_components])
-            yz_ty_tz = self.proc_func(~time_mask*outputs[3] +
-                                      time_mask*outputs[4][:,:self.num_components]*
-                                      outputs[5][:,:self.num_components]*
-                                      outputs[8][:,:self.num_components])            
-            '''
             xyz_static = self.mask_layer(outputs[0]*outputs[1]*outputs[3],~time_mask)
             #xyz_static = outputs[0]*outputs[1]*outputs[3]           
             #static_mask = torch.clip(torch.randint(0,5,(xyz_static.shape[0] // num_ray_samps,1)),0,1).to(xyz_static.device)
@@ -904,28 +795,11 @@ class KPlanesEncoding(Encoding):
                         cv2.imwrite("/home/cmaxey/grid_imgs/sub_grid_{}{}_{}_{}x{}.png".format(idx,kdx,jdx,reso_x,reso_y),sub_grid)                        
 
             self.print_idx = (self.print_idx + 1) % 1000
-            #xy_tx_ty = proc_func(~time_mask*outputs[0] + time_mask*outputs[2]*outputs[4])
-            #xz_tx_tz = proc_func(~time_mask*outputs[1] + time_mask*outputs[2]*outputs[5])
-            #yz_ty_tz = proc_func(~time_mask*outputs[3] + time_mask*outputs[4]*outputs[5])            
-            '''
-            xy_tx_ty = (self.proc_func(~time_mask*(outputs[0] + outputs[2].detach()*outputs[4].detach())) +
-                                 self.proc_func(time_mask*(outputs[0].detach() + outputs[2]*outputs[4])))
-            xz_tx_tz = (self.proc_func(~time_mask*(outputs[1] + outputs[2].detach()*outputs[5].detach())) +
-                                 self.proc_func(time_mask*(outputs[1].detach() + outputs[2]*outputs[5])))
-            yz_ty_tz = (self.proc_func(~time_mask*(outputs[3] + outputs[4].detach()*outputs[5].detach())) +
-                                 self.proc_func(time_mask*(outputs[3].detach() + outputs[4]*outputs[5])))
-            '''
             
         #xy_tx_ty = proc_func(outputs[0]) + proc_func(outputs[2]*outputs[4])
         #xz_tx_tz = proc_func(outputs[1]) + proc_func(outputs[2]*outputs[5])
         #yz_ty_tz = proc_func(outputs[3]) + proc_func(outputs[4]*outputs[5])
 
-        #xy_tx_ty = proc_func(outputs[2]*outputs[4])
-        #xz_tx_tz = proc_func(outputs[2]*outputs[5])
-        #yz_ty_tz = proc_func(outputs[4]*outputs[5])        
-        
-        #output = outputs[0]*outputs[1]*outputs[3]
-        #output = xy_tx_ty*xz_tx_tz*yz_ty_tz
         if static_mask is None or True:
             static_mask = 1
             dynamic_mask = 1

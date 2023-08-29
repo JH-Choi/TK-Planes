@@ -194,43 +194,6 @@ class KPlanesModel(Model):
         self.conv_vol_tv_mult = 0.0001
         self.mask_layer = LimitGradLayer.apply
         
-        grad_bool = False
-        self.conv_train_bool = False
-        self.conv_train_idx = 0
-        self.conv_comp = torch.nn.ModuleList([])
-        self.conv_mlp = torch.nn.ModuleList([])
-        start_layers = 3
-        curr_dim_mult = 2
-        for conv_idx in range(len(self.config.multiscale_res)):
-            curr_dim = self.config.grid_feature_dim            
-            curr_seq = torch.nn.Sequential()
-            curr_seq.append(torch.nn.Conv2d(curr_dim,curr_dim,3,1,1,padding_mode='replicate',bias=False))
-            for conv_jdx in range(start_layers + 2*conv_idx):
-                next_dim = int(curr_dim*curr_dim_mult)
-                #curr_seq.append(torch.nn.InstanceNorm2d(curr_dim))                
-                curr_seq.append(torch.nn.ReLU())
-                curr_seq.append(torch.nn.Conv2d(curr_dim,next_dim,3,2,1,padding_mode='replicate',bias=False))
-                #curr_seq.append(torch.nn.InstanceNorm2d(next_dim))      
-                curr_seq.append(torch.nn.ReLU())
-                curr_seq.append(torch.nn.Conv2d(next_dim,next_dim,3,1,1,padding_mode='replicate',bias=False))
-                curr_dim = next_dim
-
-            self.conv_comp.append(curr_seq)
-            curr_mlp_seq = torch.nn.Sequential()
-            curr_mlp_seq.append(torch.nn.Dropout(0.3))
-
-            for conv_jdx in range(start_layers + 2*conv_idx):
-                next_dim = int(curr_dim / curr_dim_mult)
-                curr_mlp_seq.append(torch.nn.Linear(curr_dim, next_dim, bias=False))
-                #curr_mlp_seq.append(torch.nn.LayerNorm(next_dim))
-                curr_mlp_seq.append(torch.nn.ReLU())
-                curr_dim = next_dim
-                
-            curr_mlp_seq.append(torch.nn.Linear(curr_dim, 2,bias=False))
-            curr_mlp_seq.append(torch.nn.Softmax(1))
-            
-            self.conv_mlp.append(curr_mlp_seq)
-        
         #self.conj = torch.nn.Parameter(torch.tensor([[1,-1,-1,-1]]),requires_grad=False)
         #self.quat = torch.nn.Parameter(torch.tensor([[1.0,0.0,0.0,0.0]]))
         
@@ -486,37 +449,25 @@ class KPlanesModel(Model):
             time_mask_alt = batch["time_mask"].unsqueeze(-1).unsqueeze(-1).expand(-1,48,-1).type(torch.float)
             num_comps = outputs_lst[0][0].shape[-1]
 
-            for output_idx,_outputs in enumerate(outputs_lst):
-                time_mask_loss += self.rgb_loss((_outputs[2][:,num_comps:]).reshape(-1,48,1),time_mask_alt)
-                time_mask_loss += self.rgb_loss((_outputs[4][:,num_comps:]).reshape(-1,48,1),time_mask_alt)
-                time_mask_loss += self.rgb_loss((_outputs[5][:,num_comps:]).reshape(-1,48,1),time_mask_alt)
-
-
-            
-            field_grids = [g.plane_coefs for g in self.field.grids]
             grid_norm = 0.0
-            reshape_num = 16
-            conv_mlp = 0.0
-            conv_vol_tvs = 0.0
             local_vol_tvs = 0.0
-            temporal_simm = 0.0
                 
             for _outputs in outputs_lst:
+                time_mask_loss += self.rgb_loss((_outputs[2][:,num_comps:]).reshape(-1,48,1),time_mask_alt)
+                time_mask_loss += self.rgb_loss((_outputs[4][:,num_comps:]).reshape(-1,48,1),time_mask_alt)
+                time_mask_loss += self.rgb_loss((_outputs[5][:,num_comps:]).reshape(-1,48,1),time_mask_alt)                
                 #continue
                 #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[0],_outputs[2][:,:num_comps]*_outputs[4][:,:num_comps]*_outputs[6])).mean()
                 #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[1],_outputs[2][:,:num_comps]*_outputs[5][:,:num_comps]*_outputs[7])).mean()
                 #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[3],_outputs[4][:,:num_comps]*_outputs[5][:,:num_comps]*_outputs[8])).mean()
                 local_vol_tvs += torch.abs(self.similarity_loss(_outputs[0],_outputs[6])).mean()
                 local_vol_tvs += torch.abs(self.similarity_loss(_outputs[1],_outputs[7])).mean()
-                local_vol_tvs += torch.abs(self.similarity_loss(_outputs[3],_outputs[8])).mean() 
+                local_vol_tvs += torch.abs(self.similarity_loss(_outputs[3],_outputs[8])).mean()
+
+                grid_norm += torch.abs(1 - torch.norm(_outputs[0],2,1)).mean()
+                grid_norm += torch.abs(1 - torch.norm(_outputs[1],2,1)).mean()
+                grid_norm += torch.abs(1 - torch.norm(_outputs[3],2,1)).mean()                
                 
-            for grid_idx,grids in enumerate(field_grids):
-                grid_norm += torch.abs(1 - torch.norm(grids[0],2,0)).mean()
-                grid_norm += torch.abs(1 - torch.norm(grids[1],2,0)).mean()
-                grid_norm += torch.abs(1 - torch.norm(grids[3],2,0)).mean()
-                #grid_norm += torch.norm(grids[6],2,0).mean()
-                #grid_norm += torch.norm(grids[7],2,0).mean()
-                #grid_norm += torch.norm(grids[8],2,0).mean()                
                 
             loss_dict["local_vol_tvs"] = 0.01*local_vol_tvs / (3*len(outputs_lst))
             loss_dict["grid_norm"] = 0.1*grid_norm / (3*len(outputs_lst))
