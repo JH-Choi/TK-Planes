@@ -190,7 +190,7 @@ class KPlanesModel(Model):
 
         self.vol_tvs = None
         self.cosine_idx = 0
-        self.vol_tv_mult = 0.0001
+        self.vol_tv_mult = 1
         self.conv_vol_tv_mult = 0.0001
         self.mask_layer = LimitGradLayer.apply
         self.conv_switch = 500
@@ -200,27 +200,24 @@ class KPlanesModel(Model):
         self.conv_train_idx = 0
         self.conv_comp = torch.nn.ModuleList([])
         self.conv_mlp = torch.nn.ModuleList([])
-        start_layers = 4
+        start_layers = 3
         curr_dim_mult = 2
         for conv_idx in range(len(self.config.multiscale_res)):
             curr_dim = self.config.grid_feature_dim            
             curr_seq = torch.nn.Sequential()
-            curr_seq.append(torch.nn.Conv2d(curr_dim,curr_dim,3,1,1,padding_mode='replicate',bias=False))
-            for conv_jdx in range(start_layers): # + conv_idx):
+            for conv_jdx in range(start_layers):
                 next_dim = int(curr_dim*curr_dim_mult)
                 #curr_seq.append(torch.nn.InstanceNorm2d(curr_dim))                
-                curr_seq.append(torch.nn.ReLU())
-                curr_seq.append(torch.nn.Conv2d(curr_dim,next_dim,3,2,1,padding_mode='replicate',bias=False))
-                #curr_seq.append(torch.nn.InstanceNorm2d(next_dim))      
-                curr_seq.append(torch.nn.ReLU())
-                curr_seq.append(torch.nn.Conv2d(next_dim,next_dim,3,1,1,padding_mode='replicate',bias=False))
+                curr_seq.append(torch.nn.Linear(curr_dim,next_dim,bias=False))
+                if conv_jdx < start_layers - 1:
+                    curr_seq.append(torch.nn.ReLU())                
                 curr_dim = next_dim
 
             self.conv_comp.append(curr_seq)
             curr_mlp_seq = torch.nn.Sequential()
             #curr_mlp_seq.append(torch.nn.Dropout(0.3))
 
-            for conv_jdx in range(start_layers): # + conv_idx):
+            for conv_jdx in range(2): # + conv_idx):
                 next_dim = int(curr_dim / curr_dim_mult)
                 curr_mlp_seq.append(torch.nn.Linear(curr_dim, next_dim, bias=False))
                 #curr_mlp_seq.append(torch.nn.LayerNorm(next_dim))
@@ -503,6 +500,9 @@ class KPlanesModel(Model):
             temporal_simm = 0.0
             self.conv_train_idx = (self.conv_train_idx + 1) % self.conv_switch
             if self.conv_train_idx == 0:
+                if self.conv_switch > 500:
+                    self.conv_switch = 500
+                    
                 for m in self.conv_comp:
                     for param in m.parameters():
                         param.requires_grad = self.conv_train_bool
@@ -511,207 +511,73 @@ class KPlanesModel(Model):
                 self.conv_train_bool = not self.conv_train_bool
 
                 
-            for _outputs in outputs_lst:
-                #continue
+            for out_idx,_outputs in enumerate(outputs_lst):
+
                 #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[0],_outputs[2][:,:num_comps]*_outputs[4][:,:num_comps]*_outputs[6])).mean()
                 #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[1],_outputs[2][:,:num_comps]*_outputs[5][:,:num_comps]*_outputs[7])).mean()
                 #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[3],_outputs[4][:,:num_comps]*_outputs[5][:,:num_comps]*_outputs[8])).mean()
-                local_vol_tvs += torch.abs(self.similarity_loss(_outputs[0],_outputs[6])).mean()
-                local_vol_tvs += torch.abs(self.similarity_loss(_outputs[1],_outputs[7])).mean()
-                local_vol_tvs += torch.abs(self.similarity_loss(_outputs[3],_outputs[8])).mean() 
+
+                if not self.conv_train_bool:
+                    out0 = _outputs[0].detach()
+                    out1 = _outputs[1].detach()
+                    out3 = _outputs[3].detach()
+
+                    out6 = _outputs[6].detach()*_outputs[2].detach()[:,:num_comps]*_outputs[4].detach()[:,:num_comps]
+                    out7 = _outputs[7].detach()*_outputs[2].detach()[:,:num_comps]*_outputs[5].detach()[:,:num_comps]
+                    out8 = _outputs[8].detach()*_outputs[4].detach()[:,:num_comps]*_outputs[5].detach()[:,:num_comps]
+                else:
+                    out0 = _outputs[0]
+                    out1 = _outputs[1]
+                    out3 = _outputs[3]
+
+                    out6 = _outputs[6]*_outputs[2][:,:num_comps]*_outputs[4][:,:num_comps]
+                    out7 = _outputs[7]*_outputs[2][:,:num_comps]*_outputs[5][:,:num_comps]
+                    out8 = _outputs[8]*_outputs[4][:,:num_comps]*_outputs[5][:,:num_comps]                    
+
+                out0 = self.conv_comp[out_idx](out0)
+                out1 = self.conv_comp[out_idx](out1)
+                out3 = self.conv_comp[out_idx](out3)
+                out6 = self.conv_comp[out_idx](out6)
+                out7 = self.conv_comp[out_idx](out7)
+                out8 = self.conv_comp[out_idx](out8)
+
+                if not self.conv_train_bool:
+                    out0 = self.conv_mlp[out_idx](out0)
+                    out1 = self.conv_mlp[out_idx](out1)
+                    out3 = self.conv_mlp[out_idx](out3)
+                    out6 = self.conv_mlp[out_idx](out6)
+                    out7 = self.conv_mlp[out_idx](out7)
+                    out8 = self.conv_mlp[out_idx](out8)                                        
+                    conv_mlp += self.conv_mlp_loss(out0,torch.zeros_like(out0))
+                    conv_mlp += self.conv_mlp_loss(out1,torch.zeros_like(out1))
+                    conv_mlp += self.conv_mlp_loss(out3,torch.zeros_like(out3))
+                    conv_mlp += self.conv_mlp_loss(out6,torch.ones_like(out6))
+                    conv_mlp += self.conv_mlp_loss(out7,torch.ones_like(out7))
+                    conv_mlp += self.conv_mlp_loss(out8,torch.ones_like(out8))                                        
+                else:
+                    local_vol_tvs += torch.abs(self.similarity_loss(out0,out6)).mean()
+                    local_vol_tvs += torch.abs(self.similarity_loss(out1,out7)).mean()
+                    local_vol_tvs += torch.abs(self.similarity_loss(out3,out8)).mean() 
                 
             for grid_idx,grids in enumerate(field_grids):
                 grid_norm += torch.abs(1 - torch.norm(grids[0],2,0)).mean()
                 grid_norm += torch.abs(1 - torch.norm(grids[1],2,0)).mean()
                 grid_norm += torch.abs(1 - torch.norm(grids[3],2,0)).mean()
-                #grid_norm += 0.1*torch.abs(1 - torch.norm(grids[6],2,0)).mean()
-                #grid_norm += 0.1*torch.abs(1 - torch.norm(grids[7],2,0)).mean()
-                #grid_norm += 0.1*torch.abs(1 - torch.norm(grids[8],2,0)).mean()                
+                #grid_norm += torch.abs(1 - torch.norm(grids[6],2,0)).mean()
+                #grid_norm += torch.abs(1 - torch.norm(grids[7],2,0)).mean()
+                #grid_norm += torch.abs(1 - torch.norm(grids[8],2,0)).mean()                
                 #grid_norm += torch.norm(grids[6],2,0).mean()
                 #grid_norm += torch.norm(grids[7],2,0).mean()
                 #grid_norm += torch.norm(grids[8],2,0).mean()                
                 
-                continue
-                g2 = grids[2]                
-                g4 = grids[4]
-                g5 = grids[5]
-                g6 = grids[6]
-                c,w,h = g6.shape
-                g7 = grids[7]
-                g8 = grids[8]
 
-                #g6 = y - x
-
-                #g2 = t - x
-
-                #g4 = t - y
-
-                #g4_t = y - t
-
-                #g42 = g4_t * g2 = (y - t) * (t - x) = y - x
-
-                g24 = torch.matmul(g4[:num_comps].transpose(-1,-2),g2[:num_comps])
-                #g24mask = torch.sigmoid(g24) #* g6
-                g24 = g24 * g6
-                #g24 = g6
-                #g24 = self.mask_layer(g6,g24mask)
-                #g24 = F.normalize(g24,2,0)
-                #g24mlp = self.conv_comp(g24.detach())
-                if not self.conv_train_bool:
-                    g24 = g24.detach()                
-                g24 = self.conv_comp[grid_idx](g24)
-
-                g24c, g24h, g24w = g24.shape
-                #g24 = g24.reshape(g24c, (g24h // reshape_num),reshape_num, (g24w // reshape_num),reshape_num)
-                #g24 = g24.permute(0,1,3,2,4)
-                #g24 = g24.reshape(c,-1,reshape_num**2)
-                #g24 = g24.permute(1,2,0)
-                #temporal_simm += compute_plane_tv(g24)
-                #g24 = F.normalize(g24.reshape(g24c,-1),2,0)
-                #g24mlp = F.normalize(g24mlp.reshape(g24c,-1),2,0)                
-                g24 = g24.reshape(g24c,-1)
-                
-                g25 = torch.matmul(g5[:num_comps].transpose(-1,-2),g2[:num_comps])
-                #g25mask = torch.sigmoid(g25) #* g7
-                g25 = g25 * g7
-                #g25 = g7
-                #g25 = self.mask_layer(g7,g25mask)
-                #g25 = F.normalize(g25,2,0)
-                #g25mlp = self.conv_comp(g25.detach())
-                if not self.conv_train_bool:
-                    g25 = g25.detach()
-                g25 = self.conv_comp[grid_idx](g25)                
-                g25c, g25h, g25w = g25.shape
-                #g25 = g25.reshape(g25c, (g25h // reshape_num),reshape_num, (g25w // reshape_num),reshape_num)
-                #g25 = g25.permute(0,1,3,2,4)
-                #g25 = g25.reshape(c,-1,reshape_num**2)
-                #g25 = g25.permute(1,2,0)
-                #temporal_simm += compute_plane_tv(g25)                
-                #g25 = F.normalize(g25.reshape(g25c,-1),2,0)
-                #g25mlp = F.normalize(g25mlp.reshape(g25c,-1),2,0)                
-                g25 = g25.reshape(g25c,-1)
-                
-                g45 = torch.matmul(g5[:num_comps].transpose(-1,-2),g4[:num_comps])
-                #g45mask = torch.sigmoid(g45) #* g8
-                g45 = g45 * g8
-                #g45 = g8
-                #g45 = self.mask_layer(g8,g45mask)
-                #g45 = F.normalize(g45,2,0)
-                #g45mlp = self.conv_comp(g45.detach())
-                if not self.conv_train_bool:
-                    g45 = g45.detach()
-                g45 = self.conv_comp[grid_idx](g45)     
-                g45c, g45h, g45w = g45.shape
-                #g45 = g45.reshape(g45c, (g45h // reshape_num),reshape_num, (g45w // reshape_num),reshape_num)
-                #g45 = g45.permute(0,1,3,2,4)
-                #g45 = g45.reshape(c,-1,reshape_num**2)
-                #g45 = g45.permute(1,2,0)
-                #g45mlp = F.normalize(g45mlp.reshape(g45c,-1),2,0)
-                #temporal_simm += compute_plane_tv(g45)
-                #g45 = F.normalize(g45.reshape(g45c,-1),2,0)
-                g45 = g45.reshape(g45c,-1)
-
-                #if self.conv_train_bool:
-
-                if not self.conv_train_bool:
-                    mlp24 = self.conv_mlp[grid_idx](g24.transpose(-1,-2))
-                    mlp25 = self.conv_mlp[grid_idx](g25.transpose(-1,-2))
-                    mlp45 = self.conv_mlp[grid_idx](g45.transpose(-1,-2))
-                    conv_mlp += self.conv_mlp_loss(mlp24,torch.ones_like(mlp24))
-                    conv_mlp += self.conv_mlp_loss(mlp25,torch.ones_like(mlp25))
-                    conv_mlp += self.conv_mlp_loss(mlp45,torch.ones_like(mlp45))
-                else:
-                    temporal_simm += -self.grid_similarity_loss(g24,g24).mean()
-                    temporal_simm += -self.grid_similarity_loss(g25,g25).mean()
-                    temporal_simm += -self.grid_similarity_loss(g45,g45).mean()
-
-
-                c,h,w = grids[0].shape
-
-                g0 = grids[0]
-                #g0 = F.normalize(g0,2,0)
-                #g0mlp = self.conv_comp(g0.detach())
-                #if not self.conv_train_bool:
-                #    g0 = g0.detach()
-                g0 = self.conv_comp[grid_idx](g0.detach()) 
-                g0c,g0h,g0w = g0.shape
-                #g0 = g0.reshape(g0c, (g0h // reshape_num),reshape_num, (g0w // reshape_num),reshape_num)
-                #g0 = g0.permute(0,1,3,2,4)
-                #g0 = g0.reshape(c,-1,reshape_num**2)                
-                #g0 = g0.permute(1,2,0)
-                #g0 = F.normalize(g0.reshape(g0c,-1),2,0)
-                #g0mlp = F.normalize(g0mlp.reshape(g0c,-1),2,0)                
-                g0 = g0.reshape(g0c,-1)
-                
-                g1 = grids[1]
-                #g1 = F.normalize(g1,2,0)
-                #if not self.conv_train_bool:
-                #    g1 = g1.detach()                
-                #g1mlp = self.conv_comp(g1.detach())
-                g1 = self.conv_comp[grid_idx](g1.detach())
-                g1c,g1h,g1w = g1.shape
-                #g1 = g1.reshape(g1c, (g1h // reshape_num),reshape_num, (g1w // reshape_num),reshape_num)
-                #g1 = g1.permute(0,1,3,2,4)
-                #g1 = g1.reshape(c,-1,reshape_num**2)
-                #g1 = g1.permute(1,2,0)
-                #g1 = F.normalize(g1.reshape(g1c,-1),2,0)
-                #g1mlp = F.normalize(g1mlp.reshape(g1c,-1),2,0)                
-                g1 = g1.reshape(g1c,-1)
-                
-                g3 = grids[3]
-                #g3 = F.normalize(g3,2,0)
-                #if not self.conv_train_bool:
-                #    g3 = g3.detach()                
-                #g3mlp = self.conv_comp(g3.detach())
-                g3 = self.conv_comp[grid_idx](g3.detach())
-                g3c,g3h,g3w = g3.shape
-                #g3 = g3.reshape(g3c, (g3h // reshape_num),reshape_num, (g3w // reshape_num),reshape_num)
-                #g3 = g3.permute(0,1,3,2,4)
-                #g3 = g3.reshape(c,-1,reshape_num**2)                                
-                #g3 = g3.permute(1,2,0)
-                #g3 = F.normalize(g3.reshape(g3c,-1),2,0)
-                #g3mlp = F.normalize(g3mlp.reshape(g3c,-1),2,0)                
-                g3 = g3.reshape(g3c,-1)
-                
-                g6 = g24
-                g7 = g25
-                g8 = g45
-
-                if not self.conv_train_bool:
-                    mlp0 = self.conv_mlp[grid_idx](g0.transpose(-1,-2))
-                    mlp1 = self.conv_mlp[grid_idx](g1.transpose(-1,-2))
-                    mlp3 = self.conv_mlp[grid_idx](g3.transpose(-1,-2))
-                    conv_mlp += self.conv_mlp_loss(mlp0,torch.zeros_like(mlp0))
-                    conv_mlp += self.conv_mlp_loss(mlp1,torch.zeros_like(mlp1))
-                    conv_mlp += self.conv_mlp_loss(mlp3,torch.zeros_like(mlp3))                                              
-                else:
-                    vol_tvs += torch.abs(self.grid_similarity_loss(g0,g6)).mean()
-                    vol_tvs += torch.abs(self.grid_similarity_loss(g1,g7)).mean()
-                    vol_tvs += torch.abs(self.grid_similarity_loss(g3,g8)).mean()                
-                                               
-
-                reshape_num *= 2
-                
-                #vol_tvs += torch.abs(torch.matmul(grids[1].reshape(c,-1).transpose(-1,-2),grids[7].reshape(c,-1))).mean()
-                #vol_tvs += torch.abs(torch.matmul(grids[3].reshape(c,-1).transpose(-1,-2),grids[8].reshape(c,-1))).mean()                
-                
-                #vol_tvs += torch.abs(self.grid_similarity_loss(grids[0],grids[6])).mean()
-                #vol_tvs += torch.abs(self.grid_similarity_loss(grids[1],grids[7])).mean()
-                #vol_tvs += torch.abs(self.grid_similarity_loss(grids[3],grids[8])).mean()
-
-            if self.cosine_idx % 3000 == 0:
-                self.vol_tv_mult = np.clip(self.vol_tv_mult * 2,0,0.01)
-                self.conv_vol_tv_mult = np.clip(self.conv_vol_tv_mult*2,0,0.01)
-            '''
             if self.conv_train_bool:
-                loss_dict["vol_tvs"] = self.vol_tv_mult*(vol_tvs / (3*len(outputs_lst)))
-                loss_dict["temporal_simm"] = self.conv_vol_tv_mult*temporal_simm / (3*len(outputs_lst))                
+                loss_dict["vol_tvs"] = self.vol_tv_mult*(local_vol_tvs / (3*len(outputs_lst)))
+                self.vol_tv_mult *= 0.999
             else:
                 loss_dict["conv_mlp"] = conv_mlp / (6*len(outputs_lst))
-            '''
-            loss_dict["local_vol_tvs"] = 0.01*local_vol_tvs / (3*len(outputs_lst))
-            loss_dict["grid_norm"] = 0.01*grid_norm / (6*len(outputs_lst))
-            
+
+            loss_dict["grid_norm"] = 0.1*grid_norm / (6*len(outputs_lst))            
             loss_dict["time_masks"] = time_mask_loss
             
         return loss_dict
