@@ -193,7 +193,7 @@ class KPlanesModel(Model):
         self.vol_tv_mult = 1
         self.conv_vol_tv_mult = 0.0001
         self.mask_layer = LimitGradLayer.apply
-        self.conv_switch = 500
+        self.conv_switch = 5000
         
         grad_bool = False
         self.conv_train_bool = False
@@ -572,7 +572,7 @@ class KPlanesModel(Model):
                 
 
             if self.conv_train_bool:
-                loss_dict["vol_tvs"] = self.vol_tv_mult*(local_vol_tvs / (3*len(outputs_lst)))
+                loss_dict["vol_tvs"] = 0.01*(local_vol_tvs / (3*len(outputs_lst)))
                 self.vol_tv_mult *= 0.999
             else:
                 loss_dict["conv_mlp"] = conv_mlp / (6*len(outputs_lst))
