@@ -637,9 +637,9 @@ class KPlanesEncoding(Encoding):
             )
         has_time_planes = self.in_dim == 4
 
-        #self.proc_func = torch.nn.Identity()
+        self.proc_func = torch.nn.Identity()
         #self.proc_func = torch.nn.Tanh()
-        self.proc_func = F.normalize        
+        #self.proc_func = F.normalize        
         self.print_idx = 0
         self.mask_layer = LimitGradLayer.apply
         self.coo_combs = list(itertools.combinations(range(self.in_dim), 2))
@@ -679,8 +679,8 @@ class KPlanesEncoding(Encoding):
             nn.ReLU(),
             nn.Linear(self.num_components*4, self.num_components*4, bias=bias_bool),
             #nn.LayerNorm(self.num_components*4),            
-            #nn.ReLU(),
-            #nn.Linear(self.num_components*4, self.num_components*4, bias=bias_bool),
+            nn.ReLU(),
+            nn.Linear(self.num_components*4, self.num_components*4, bias=bias_bool),
             #nn.LayerNorm(self.num_components*4),
             nn.ReLU(),            
             nn.Linear(self.num_components*4, self.num_components, bias=bias_bool))
@@ -937,6 +937,7 @@ class KPlanesEncoding(Encoding):
         #sig_func = torch.nn.Identity()
         #output = self.proc_func(self.output_head(torch.cat([static_mask*F.normalize(xyz_static),dynamic_mask*F.normalize(xyz_temporal),
         #output = self.proc_func(self.output_head(torch.cat([F.normalize(xyz_static),F.normalize(xyz_temporal),
+        #output = self.proc_func(self.output_head(torch.cat([static_mask*xyz_static,dynamic_mask*xyz_temporal,
         output = self.proc_func(self.output_head(torch.cat([xyz_static,xyz_temporal,
                                                             outputs[2][:,self.num_components:],
                                                             outputs[4][:,self.num_components:],
