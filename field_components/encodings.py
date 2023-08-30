@@ -651,7 +651,7 @@ class KPlanesEncoding(Encoding):
         self.plane_coefs = nn.ParameterList()
         #self.coo_combs = [(0,1),(0,2),(1,2), (0,1),(0,3),(1,3), (0,2),(0,3),(2,3), (1,2),(1,3),(2,3)]
         self.coo_combs = [(0,1),(0,2),(0,3), (1,2),(1,3),(2,3), (0,1),(0,2),(1,2)]        
-        for coo_comb in self.coo_combs:
+        for coo_idx,coo_comb in enumerate(self.coo_combs):
             num_comps = self.num_components
             if 3 in coo_comb:
                 num_comps = num_comps + 1
@@ -665,11 +665,11 @@ class KPlanesEncoding(Encoding):
                 #with torch.no_grad():
                 #    new_plane_coef = new_plane_coef*100
                 #nn.init.uniform_(new_plane_coef, a=init_a, b=init_b)
-                nn.init.uniform_(new_plane_coef, a=0, b=1)    
-            #elif 6 in coo_comb or 7 in coo_comb or 8 in coo_comb:
-            #    nn.init.uniform_(new_plane_coef, a=-0.01, b=0.01)                
+                nn.init.uniform_(new_plane_coef, a=0, b=0.1)    
+            elif coo_idx > 5:
+                nn.init.uniform_(new_plane_coef, a=-0.1, b=0.1)
             else:
-                nn.init.uniform_(new_plane_coef, a=-init_b, b=init_b)
+                nn.init.uniform_(new_plane_coef, a=init_a, b=init_b)
             self.plane_coefs.append(new_plane_coef)
 
         bias_bool = False
