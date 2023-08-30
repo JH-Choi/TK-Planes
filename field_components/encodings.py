@@ -676,11 +676,11 @@ class KPlanesEncoding(Encoding):
         self.output_head = nn.Sequential(
             nn.Linear(self.num_components*2 + 3, self.num_components*4, bias=bias_bool),
             #nn.LayerNorm(self.num_components*4),
-            #nn.ReLU(),
-            #nn.Linear(self.num_components*4, self.num_components*4, bias=bias_bool),
+            nn.ReLU(),
+            nn.Linear(self.num_components*4, self.num_components*4, bias=bias_bool),
             #nn.LayerNorm(self.num_components*4),            
-            #nn.ReLU(),
-            #nn.Linear(self.num_components*4, self.num_components*4, bias=bias_bool),
+            nn.ReLU(),
+            nn.Linear(self.num_components*4, self.num_components*4, bias=bias_bool),
             #nn.LayerNorm(self.num_components*4),
             nn.ReLU(),            
             nn.Linear(self.num_components*4, self.num_components, bias=bias_bool))
