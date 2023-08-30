@@ -220,8 +220,8 @@ class KPlanesModel(Model):
             curr_mlp_seq = torch.nn.Sequential()
             #curr_mlp_seq.append(torch.nn.Dropout(0.3))
 
-            for conv_jdx in range(start_layers): # + conv_idx):
-                next_dim = int(curr_dim / curr_dim_mult)
+            for conv_jdx in range(start_layers // 2): # + conv_idx):
+                next_dim = int(curr_dim / (2*curr_dim_mult))
                 curr_mlp_seq.append(torch.nn.Linear(curr_dim, next_dim, bias=False))
                 #curr_mlp_seq.append(torch.nn.LayerNorm(next_dim))
                 curr_mlp_seq.append(torch.nn.ReLU())
@@ -550,9 +550,9 @@ class KPlanesModel(Model):
 
                 #g42 = g4_t * g2 = (y - t) * (t - x) = y - x
 
-                g24 = torch.matmul(g4[:num_comps].transpose(-1,-2),g2[:num_comps])
+                #g24 = torch.matmul(g4[:num_comps].transpose(-1,-2),g2[:num_comps])
                 #g24mask = torch.sigmoid(g24) #* g6
-                g24 = g24 * g6
+                g24 = g6
                 #g24 = g6
                 #g24 = self.mask_layer(g6,g24mask)
                 #g24 = F.normalize(g24,2,0)
@@ -571,9 +571,9 @@ class KPlanesModel(Model):
                 #g24mlp = F.normalize(g24mlp.reshape(g24c,-1),2,0)                
                 g24 = g24.reshape(g24c,-1)
                 
-                g25 = torch.matmul(g5[:num_comps].transpose(-1,-2),g2[:num_comps])
+                #g25 = torch.matmul(g5[:num_comps].transpose(-1,-2),g2[:num_comps])
                 #g25mask = torch.sigmoid(g25) #* g7
-                g25 = g25 * g7
+                g25 = g7
                 #g25 = g7
                 #g25 = self.mask_layer(g7,g25mask)
                 #g25 = F.normalize(g25,2,0)
@@ -591,9 +591,9 @@ class KPlanesModel(Model):
                 #g25mlp = F.normalize(g25mlp.reshape(g25c,-1),2,0)                
                 g25 = g25.reshape(g25c,-1)
                 
-                g45 = torch.matmul(g5[:num_comps].transpose(-1,-2),g4[:num_comps])
+                #g45 = torch.matmul(g5[:num_comps].transpose(-1,-2),g4[:num_comps])
                 #g45mask = torch.sigmoid(g45) #* g8
-                g45 = g45 * g8
+                g45 = g8
                 #g45 = g8
                 #g45 = self.mask_layer(g8,g45mask)
                 #g45 = F.normalize(g45,2,0)
