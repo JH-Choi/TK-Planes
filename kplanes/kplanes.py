@@ -463,7 +463,7 @@ class KPlanesModel(Model):
     def get_loss_dict(self, outputs, batch, metrics_dict=None):
         image = batch["image"].to(self.device)
 
-        image_mask = batch["time_mask"].unsqueeze(-1).to(image.dtype)
+        #image_mask = batch["time_mask"].unsqueeze(-1).to(image.dtype)
         #print("SUM: {}".format(torch.sum(image_mask)))
         #exit(-1)
         red_image = torch.ones_like(image)
@@ -484,13 +484,13 @@ class KPlanesModel(Model):
             outputs_lst = self.vol_tvs
             vol_tvs = 0.0
             time_mask_loss = 0.0
-            time_mask_alt = batch["time_mask"].unsqueeze(-1).unsqueeze(-1).expand(-1,48,-1).type(torch.float)
+            #time_mask_alt = batch["time_mask"].unsqueeze(-1).unsqueeze(-1).expand(-1,48,-1).type(torch.float)
             num_comps = outputs_lst[0][0].shape[-1]
 
-            for output_idx,_outputs in enumerate(outputs_lst):
-                time_mask_loss += self.rgb_loss((_outputs[2][:,num_comps:]).reshape(-1,48,1),time_mask_alt)
-                time_mask_loss += self.rgb_loss((_outputs[4][:,num_comps:]).reshape(-1,48,1),time_mask_alt)
-                time_mask_loss += self.rgb_loss((_outputs[5][:,num_comps:]).reshape(-1,48,1),time_mask_alt)
+            #for output_idx,_outputs in enumerate(outputs_lst):
+            #    time_mask_loss += self.rgb_loss((_outputs[2][:,num_comps:]).reshape(-1,48,1),time_mask_alt)
+            #    time_mask_loss += self.rgb_loss((_outputs[4][:,num_comps:]).reshape(-1,48,1),time_mask_alt)
+            #    time_mask_loss += self.rgb_loss((_outputs[5][:,num_comps:]).reshape(-1,48,1),time_mask_alt)
 
 
             
@@ -709,15 +709,15 @@ class KPlanesModel(Model):
             if self.conv_train_bool:
                 #loss_dict["vol_tvs"] = self.vol_tv_mult*(vol_tvs / (3*len(outputs_lst)))
                 #loss_dict["temporal_simm"] = self.conv_vol_tv_mult*temporal_simm / (3*len(outputs_lst))
-                loss_dict["vol_tvs"] = 0.001*(vol_tvs / (3*len(outputs_lst)))
-                loss_dict["temporal_simm"] = 0.001*temporal_simm / (3*len(outputs_lst))                                
+                loss_dict["vol_tvs"] = 0.01*(vol_tvs / (3*len(outputs_lst)))
+                loss_dict["temporal_simm"] = 0.01*temporal_simm / (3*len(outputs_lst))                                
             else:
                 loss_dict["conv_mlp"] = conv_mlp / (6*len(outputs_lst))
             
-            loss_dict["local_vol_tvs"] = 0.001*local_vol_tvs / (3*len(outputs_lst))
+            loss_dict["local_vol_tvs"] = 0.01*local_vol_tvs / (3*len(outputs_lst))
             loss_dict["grid_norm"] = 0.1*grid_norm / (6*len(outputs_lst))
             
-            loss_dict["time_masks"] = time_mask_loss
+            #loss_dict["time_masks"] = time_mask_loss
             
         return loss_dict
 

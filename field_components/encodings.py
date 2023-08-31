@@ -654,7 +654,7 @@ class KPlanesEncoding(Encoding):
         for coo_idx,coo_comb in enumerate(self.coo_combs):
             num_comps = self.num_components
             if 3 in coo_comb:
-                num_comps = num_comps + 1
+                num_comps = num_comps #+ 1
             new_plane_coef = nn.Parameter(
                 torch.empty([num_comps] + [self.resolution[cc] for cc in coo_comb[::-1]])
             )
@@ -674,7 +674,7 @@ class KPlanesEncoding(Encoding):
 
         bias_bool = False
         self.output_head = nn.Sequential(
-            nn.Linear(self.num_components*2 + 3, self.num_components*4, bias=bias_bool),
+            nn.Linear(self.num_components*2, self.num_components*4, bias=bias_bool),
             #nn.LayerNorm(self.num_components*4),
             nn.ReLU(),
             nn.Linear(self.num_components*4, self.num_components*4, bias=bias_bool),
@@ -735,7 +735,7 @@ class KPlanesEncoding(Encoding):
             )  # [1, output_dim, 1, flattened_bs]
             num_comps = self.num_components
             if 3 in coo_comb:
-                num_comps = num_comps + 1
+                num_comps = num_comps #+ 1
             interp = interp.view(num_comps, -1).T  # [flattened_bs, output_dim]
             #if 3 in coo_comb:
             #    interp = torch.fft.rfft(interp)
@@ -938,10 +938,7 @@ class KPlanesEncoding(Encoding):
         #output = self.proc_func(self.output_head(torch.cat([static_mask*F.normalize(xyz_static),dynamic_mask*F.normalize(xyz_temporal),
         #output = self.proc_func(self.output_head(torch.cat([F.normalize(xyz_static),F.normalize(xyz_temporal),
         #output = self.proc_func(self.output_head(torch.cat([static_mask*xyz_static,dynamic_mask*xyz_temporal,
-        output = self.proc_func(self.output_head(torch.cat([xyz_static,xyz_temporal,
-                                                            outputs[2][:,self.num_components:],
-                                                            outputs[4][:,self.num_components:],
-                                                            outputs[5][:,self.num_components:]],dim=-1)))
+        output = self.proc_func(self.output_head(torch.cat([xyz_static,xyz_temporal],dim=-1)))
         
         #output = ((outputs[0] + tx_ty) *
         #          (outputs[1] + tx_tz) *

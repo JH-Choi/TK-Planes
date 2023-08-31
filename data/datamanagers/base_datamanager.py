@@ -519,7 +519,7 @@ class VanillaDataManager(DataManager, Generic[TDataset]):
         #print(ray_bundle.metadata["directions_norm"].shape)
         #print(batch["time_mask"].unsqueeze(-1).shape)
         #exit(-1)
-        ray_bundle.metadata["time_mask"] = batch["time_mask"].unsqueeze(-1)
+        #ray_bundle.metadata["time_mask"] = batch["time_mask"].unsqueeze(-1)
         
         return ray_bundle, batch
 

@@ -224,18 +224,9 @@ class KPlanesField(Field):
 
         positions_flat = positions.view(-1, positions.shape[-1])
         time_mask = None
-        if "time_mask" in ray_samples.metadata:
-            time_mask = ray_samples.metadata["time_mask"]
-
         static_mask = None
         dynamic_mask = None
         self.masks = None
-        if time_mask is not None:
-            static_mask = torch.clip(torch.randint(0,5,(time_mask.shape[0],1)),0,1).to(time_mask.device)
-            dynamic_mask = torch.clip(torch.randint(0,5,(time_mask.shape[0],1)),0,1).to(time_mask.device)
-            self.masks = torch.clip(static_mask + dynamic_mask,0,1)
-            static_mask = static_mask.repeat(1,time_mask.shape[1])
-            dynamic_mask = dynamic_mask.repeat(1,time_mask.shape[1])
         features, vol_tvs = interpolate_ms_features(
             positions_flat,
             time_mask,

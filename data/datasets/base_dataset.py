@@ -107,7 +107,7 @@ class InputDataset(Dataset):
                 data["mask"].shape[:2] == data["image"].shape[:2]
             ), f"Mask and image have different shapes. Got {data['mask'].shape[:2]} and {data['image'].shape[:2]}"
 
-        metadata = self.get_metadata(data)
+        metadata = {} #self.get_metadata(data)
         data.update(metadata)
         return data
 
