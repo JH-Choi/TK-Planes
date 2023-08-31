@@ -124,7 +124,7 @@ class InputDataset(Dataset):
             newsize = (int(width * self.scale_factor), int(height * self.scale_factor))
             pil_image = pil_image.resize(newsize, resample=Image.BILINEAR)
         image = np.array(pil_image, dtype="uint8")  # shape is (h, w) or (h, w, 3 or 4)
-        #image = image[:,:,0]
+        image = image[:,:,:3]
         assert(len(image.shape) == 3)
 
         #image = torch.from_numpy(image) > 200

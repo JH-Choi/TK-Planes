@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple, Type
 
 import numpy as np
+import cv2
 import torch
 import torch.nn.functional as F
 from torch.nn import Parameter
@@ -463,12 +464,14 @@ class KPlanesModel(Model):
     def get_loss_dict(self, outputs, batch, metrics_dict=None):
         image = batch["image"].to(self.device)
 
-        image_mask = batch["time_mask"].unsqueeze(-1).to(image.dtype)
+        mask_image = batch["time_mask"].to(image.dtype)
+        image_mask = torch.sum(mask_image,-1).unsqueeze(-1).to(image.dtype)
         #print("SUM: {}".format(torch.sum(image_mask)))
         #exit(-1)
-        image_mask_bool = (image_mask > 30).to(float)
-        
-        image = image*(1 - image_mask_bool) + red_image*image_mask_bool
+        image_mask_bool = (image_mask > 30).to(image.dtype)
+
+        mask_image = mask_image / 255.
+        #image = image*(1 - image_mask_bool) + mask_image*image_mask_bool
         #image = (1 - image_mask) + red_image*image_mask        
         loss_dict = {"rgb": self.rgb_loss(image, outputs["rgb"])}
         #loss_dict = {"rgb": self.rgb_loss(self.field.masks*image, outputs["rgb"])}        
@@ -484,7 +487,7 @@ class KPlanesModel(Model):
             outputs_lst = self.vol_tvs
             vol_tvs = 0.0
             time_mask_loss = 0.0
-            time_mask_alt = batch["time_mask"].unsqueeze(-1).unsqueeze(-1).expand(-1,48,-1).type(torch.float)
+            time_mask_alt = image_mask_bool.unsqueeze(-1).expand(-1,48,-1)
             num_comps = outputs_lst[0][0].shape[-1]
 
             for output_idx,_outputs in enumerate(outputs_lst):

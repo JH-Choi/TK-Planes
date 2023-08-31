@@ -515,12 +515,13 @@ class VanillaDataManager(DataManager, Generic[TDataset]):
         assert isinstance(image_batch, dict)
         batch = self.train_pixel_sampler.sample(image_batch)
         ray_indices = batch["indices"]
+
         ray_bundle = self.train_ray_generator(ray_indices)
         #print(ray_bundle.metadata["directions_norm"].shape)
         #print(batch["time_mask"].unsqueeze(-1).shape)
-        #exit(-1)
-        ray_bundle.metadata["time_mask"] = batch["time_mask"].unsqueeze(-1)
-        
+
+        ray_bundle.metadata["time_mask"] = batch["time_mask"]
+
         return ray_bundle, batch
 
     def next_eval(self, step: int) -> Tuple[RayBundle, Dict]:

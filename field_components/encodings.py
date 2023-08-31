@@ -825,6 +825,7 @@ class KPlanesEncoding(Encoding):
             #          outputs[2][:,:self.num_components]*outputs[4][:,:self.num_components]*outputs[5][:,:self.num_components])
         #    output = xyz_static * xyz_temporal
         else:
+            time_mask = torch.sum(time_mask,-1)
             time_mask = time_mask.reshape(-1,1)
             
             '''
