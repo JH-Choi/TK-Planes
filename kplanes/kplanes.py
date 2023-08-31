@@ -466,9 +466,9 @@ class KPlanesModel(Model):
         image_mask = batch["time_mask"].unsqueeze(-1).to(image.dtype)
         #print("SUM: {}".format(torch.sum(image_mask)))
         #exit(-1)
-        red_image = torch.ones_like(image)
-        red_image[:,1:3] = 0
-        #image = image*(1 - image_mask) + red_image*image_mask
+        image_mask_bool = (image_mask > 30).to(float)
+        
+        image = image*(1 - image_mask_bool) + red_image*image_mask_bool
         #image = (1 - image_mask) + red_image*image_mask        
         loss_dict = {"rgb": self.rgb_loss(image, outputs["rgb"])}
         #loss_dict = {"rgb": self.rgb_loss(self.field.masks*image, outputs["rgb"])}        

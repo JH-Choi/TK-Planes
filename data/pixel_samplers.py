@@ -99,6 +99,8 @@ class PixelSampler:
             static_indices = self.sample_method(static_num_rays_per_batch, num_images, image_height, image_width, mask=~batch["time_mask"].unsqueeze(-1),device=device)
             dynamic_indices = self.sample_method(dynamic_num_rays_per_batch, num_images, image_height, image_width, mask=batch["time_mask"].unsqueeze(-1),device=device)
             indices = torch.cat([static_indices,dynamic_indices],dim=0)
+            #print(indices.shape)
+            #exit(-1)
         else:
             indices = self.sample_method(num_rays_per_batch, num_images, image_height, image_width, device=device)
 

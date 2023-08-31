@@ -124,10 +124,10 @@ class InputDataset(Dataset):
             newsize = (int(width * self.scale_factor), int(height * self.scale_factor))
             pil_image = pil_image.resize(newsize, resample=Image.BILINEAR)
         image = np.array(pil_image, dtype="uint8")  # shape is (h, w) or (h, w, 3 or 4)
-        image = image[:,:,0]
-        assert(len(image.shape) == 2)
+        #image = image[:,:,0]
+        assert(len(image.shape) == 3)
 
-        image = torch.from_numpy(image) > 200
+        #image = torch.from_numpy(image) > 200
         
         del data
         return {"time_mask":image}
