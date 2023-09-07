@@ -468,7 +468,7 @@ class KPlanesModel(Model):
         image_mask = torch.sum(mask_image,-1).unsqueeze(-1).to(image.dtype)
         #print("SUM: {}".format(torch.sum(image_mask)))
         #exit(-1)
-        image_mask_bool = (image_mask > 30).to(image.dtype)
+        image_mask_bool = (image_mask > 10).to(image.dtype)
 
         mask_image = mask_image / 255.
         #image = image*(1 - image_mask_bool) + mask_image*image_mask_bool
