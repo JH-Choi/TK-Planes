@@ -465,10 +465,19 @@ class KPlanesModel(Model):
         image = batch["image"].to(self.device)
 
         mask_image = batch["time_mask"].to(image.dtype)
+        
+        mask_image = mask_image.detach().cpu().numpy()
+        print(mask_image.shape)
+        mask_set = set()
+        for i in range(mask_image.shape[0]):
+            mask_set.add(tuple(mask_image[i].tolist()))
+        print(mask_set)
+        exit(-1)
+        
         image_mask = torch.sum(mask_image,-1).unsqueeze(-1).to(image.dtype)
         #print("SUM: {}".format(torch.sum(image_mask)))
         #exit(-1)
-        image_mask_bool = (image_mask > 30).to(image.dtype)
+        image_mask_bool = (image_mask > 10).to(image.dtype)
 
         mask_image = mask_image / 255.
         #image = image*(1 - image_mask_bool) + mask_image*image_mask_bool
@@ -521,7 +530,7 @@ class KPlanesModel(Model):
                 #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[3],_outputs[4][:,:num_comps]*_outputs[5][:,:num_comps]*_outputs[8])).mean()
                 local_vol_tvs += torch.abs(self.similarity_loss(_outputs[0].detach(),_outputs[6])).mean()
                 local_vol_tvs += torch.abs(self.similarity_loss(_outputs[1].detach(),_outputs[7])).mean()
-                local_vol_tvs += torch.abs(self.similarity_loss(_outputs[3].detach(),_outputs[8])).mean() 
+                local_vol_tvs += torch.abs(self.similarity_loss(_outputs[3].detach(),_outputs[8])).mean()
                 
             for grid_idx,grids in enumerate(field_grids):
                 grid_norm += torch.abs(1 - torch.norm(grids[0],2,0)).mean()
