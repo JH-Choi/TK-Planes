@@ -465,14 +465,19 @@ class KPlanesModel(Model):
         image = batch["image"].to(self.device)
 
         mask_image = batch["time_mask"].to(image.dtype)
-        
-        mask_image = mask_image.detach().cpu().numpy()
-        print(mask_image.shape)
-        mask_set = set()
-        for i in range(mask_image.shape[0]):
-            mask_set.add(tuple(mask_image[i].tolist()))
-        print(mask_set)
-        exit(-1)
+
+        centers = torch.tensor([(255,0,0),(0,255,0),(0,0,255),(255,255,0),(255,0,255),(0,255,255),(255,255,255),(125,125,125),(50,50,50),(125,0,125)])
+        centers = centers.to("cuda:0")
+        centers = centers.unsqueeze(0)
+        #mask_image = mask_image.unsqueeze(1)
+        dists = torch.sqrt(torch.sum((mask_image.unsqueeze(1) - centers)**2,dim=-1))
+        dists = dists == 0
+
+        #outtie = self.vol_tvs[0][0].reshape(-1,48,32)
+        #nonzero0 = torch.nonzero(dists[:,0]).squeeze()
+        #new_outtie = outtie[nonzero0].transpose(0,1)
+        #new_outtie_comp = torch.matmul(new_outtie,new_outtie.transpose(-1,-2))
+
         
         image_mask = torch.sum(mask_image,-1).unsqueeze(-1).to(image.dtype)
         #print("SUM: {}".format(torch.sum(image_mask)))
@@ -531,6 +536,13 @@ class KPlanesModel(Model):
                 local_vol_tvs += torch.abs(self.similarity_loss(_outputs[0].detach(),_outputs[6])).mean()
                 local_vol_tvs += torch.abs(self.similarity_loss(_outputs[1].detach(),_outputs[7])).mean()
                 local_vol_tvs += torch.abs(self.similarity_loss(_outputs[3].detach(),_outputs[8])).mean()
+                for cdx in range(centers.shape[0]):
+                    for tdx in [6,7,8]:
+                        outtie = _outputs[tdx].reshape(-1,48,32)
+                        nonzero = torch.nonzero(dists[:,cdx]).squeeze()
+                        new_outtie = outtie[nonzero].transpose(0,1)
+                        new_outtie_comp = torch.matmul(new_outtie,new_outtie.transpose(-1,-2))
+                        local_vol_tvs += -new_outtie_comp.mean()
                 
             for grid_idx,grids in enumerate(field_grids):
                 grid_norm += torch.abs(1 - torch.norm(grids[0],2,0)).mean()
