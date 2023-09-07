@@ -94,7 +94,7 @@ class PixelSampler:
                 num_rays_per_batch, num_images, image_height, image_width, mask=batch["mask"], device=device
             )
         elif "time_mask" in batch:
-            dynamic_num_rays_per_batch = 512
+            dynamic_num_rays_per_batch = 1024 + 512
             static_num_rays_per_batch = num_rays_per_batch - dynamic_num_rays_per_batch
             time_mask = torch.sum(batch["time_mask"],-1) > 30
             static_indices = self.sample_method(static_num_rays_per_batch, num_images, image_height, image_width, mask=~time_mask.unsqueeze(-1),device=device)

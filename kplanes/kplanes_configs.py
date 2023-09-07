@@ -127,13 +127,13 @@ kplanes_dynamic_method = MethodSpecification(
             datamanager=VanillaDataManagerConfig(
                 dataparser=OkutamaDataParserConfig(),
                 #dataparser=DNeRFDataParserConfig(),                                
-                train_num_rays_per_batch=4196 + 512, #8192,
+                train_num_rays_per_batch=4196 + 1024 + 512,
                 eval_num_rays_per_batch=8,
                 camera_res_scale_factor=0.5,  # DNeRF train on 400x400
             ),
             model=KPlanesModelConfig(
                 eval_num_rays_per_chunk=1 << 12,
-                grid_base_resolution=[128, 128, 128, 50],  # time-resolution should be half the time-steps
+                grid_base_resolution=[128, 128, 64, 77],  # time-resolution should be half the time-steps
                 grid_feature_dim=32,
                 near_plane=5,
                 far_plane=350,
@@ -143,8 +143,8 @@ kplanes_dynamic_method = MethodSpecification(
                 is_contracted=False,
                 proposal_net_args_list=[
                     # time-resolution should be half the time-steps
-                    {"num_output_coords": 8, "resolution": [128, 128, 128, 50]},
-                    {"num_output_coords": 8, "resolution": [256, 256, 256, 50]},
+                    {"num_output_coords": 8, "resolution": [128, 128, 64, 77]},
+                    {"num_output_coords": 8, "resolution": [256, 256, 128, 77]},
                 ],
                 num_proposal_samples=(64,64),
                 loss_coefficients={
