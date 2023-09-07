@@ -650,7 +650,7 @@ class KPlanesEncoding(Encoding):
         # static models (in_dim == 3) will only have the 1st, 2nd and 4th planes.
         self.plane_coefs = nn.ParameterList()
         #self.coo_combs = [(0,1),(0,2),(1,2), (0,1),(0,3),(1,3), (0,2),(0,3),(2,3), (1,2),(1,3),(2,3)]
-        #self.coo_combs = [(0,1),(0,2),(0,3), (1,2),(1,3),(2,3), (0,1),(0,2),(1,2)]        
+        self.coo_combs = [(0,1),(0,2),(0,3), (1,2),(1,3),(2,3), (0,1),(0,2),(1,2)]        
         for coo_comb in self.coo_combs:
             num_comps = self.num_components
             new_plane_coef = nn.Parameter(
@@ -721,9 +721,9 @@ class KPlanesEncoding(Encoding):
         vol_tv = 0.0
 
         xyz_static = outputs[0]*outputs[1]*outputs[3]
-        xyz_temporal = outputs[2]*outputs[4]*outputs[5]
+        xyz_temporal = outputs[2]*outputs[4]*outputs[5]*outputs[6]*outputs[7]*outputs[8]
 
-        output = xyz_static*xyz_temporal
+        output = xyz_static + xyz_temporal
         
         vol_tv = outputs
 
