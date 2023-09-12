@@ -120,14 +120,14 @@ kplanes_dynamic_method = MethodSpecification(
         method_name="kplanes-dynamic",
         steps_per_eval_batch=500,
         steps_per_save=2000,
-        steps_per_eval_all_images=100000,
-        max_num_iterations=100001,
+        steps_per_eval_all_images=200000,
+        max_num_iterations=200001,
         mixed_precision=True,
         pipeline=VanillaPipelineConfig(
             datamanager=VanillaDataManagerConfig(
                 dataparser=OkutamaDataParserConfig(),
                 #dataparser=DNeRFDataParserConfig(),                                
-                train_num_rays_per_batch=4196 + 1024 + 512,
+                train_num_rays_per_batch=4196 + 512,
                 eval_num_rays_per_batch=8,
                 camera_res_scale_factor=0.5,  # DNeRF train on 400x400
             ),
@@ -162,11 +162,11 @@ kplanes_dynamic_method = MethodSpecification(
         optimizers={
             "proposal_networks": {
                 "optimizer": AdamOptimizerConfig(lr=1e-3, eps=1e-12),
-                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=100000),
+                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=200000),
             },
             "fields": {
                 "optimizer": AdamOptimizerConfig(lr=1e-3, eps=1e-12),
-                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=100000),
+                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=200000),
             },
         },
         viewer=ViewerConfig(num_rays_per_chunk=1 << 12),

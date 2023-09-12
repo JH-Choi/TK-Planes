@@ -24,6 +24,7 @@ from typing import Dict, List, Optional, Tuple, Type
 
 import numpy as np
 import cv2
+import random
 import torch
 import torch.nn.functional as F
 from torch.nn import Parameter
@@ -295,9 +296,10 @@ class KPlanesModel(Model):
 
         # losses
         self.rgb_loss = MSELoss()
-        self.similarity_loss = torch.nn.CosineSimilarity(dim=1)
+        self.similarity_loss = torch.nn.CosineSimilarity(dim=2)
         self.grid_similarity_loss = torch.nn.CosineSimilarity(dim=0)        
         self.conv_mlp_loss = torch.nn.CrossEntropyLoss()
+        self.mask_layer = LimitGradLayer.apply
         
         # metrics
         self.psnr = PeakSignalNoiseRatio(data_range=1.0)
@@ -466,7 +468,10 @@ class KPlanesModel(Model):
 
         mask_image = batch["time_mask"].to(image.dtype)
 
+        weights_lst = outputs['weights_list']#[-1]
+        
         centers = torch.tensor([(255,0,0),(0,255,0),(0,0,255),(255,255,0),(255,0,255),(0,255,255),(255,255,255),(125,125,125),(50,50,50),(125,0,125)])
+        center_num = centers.shape[0]
         centers = centers.to("cuda:0")
         centers = centers.unsqueeze(0)
         #mask_image = mask_image.unsqueeze(1)
@@ -490,7 +495,7 @@ class KPlanesModel(Model):
         loss_dict = {"rgb": self.rgb_loss(image, outputs["rgb"])}
         #loss_dict = {"rgb": self.rgb_loss(self.field.masks*image, outputs["rgb"])}        
         self.cosine_idx += 1
-        
+
         if self.training:
             for key in self.config.loss_coefficients:
                 if key in metrics_dict:
@@ -519,30 +524,77 @@ class KPlanesModel(Model):
             local_vol_tvs = 0.0
             temporal_simm = 0.0
             self.conv_train_idx = (self.conv_train_idx + 1) % self.conv_switch
-            if self.conv_train_idx == 0:
+            if self.conv_train_idx == 0 and False:
                 for m in self.conv_comp:
                     for param in m.parameters():
                         param.requires_grad = self.conv_train_bool
 
                 self.conv_switch = 100 if self.conv_switch == 500 else 500
                 self.conv_train_bool = not self.conv_train_bool
-
                 
-            for _outputs in outputs_lst:
+            weights = weights_lst[-1].detach()
+            for odx,_outputs in enumerate(outputs_lst):
                 #continue
+                #for tdx0,tdx1,tdx2,tdx3 in [(0,2,4,6),(1,2,5,7),(3,4,5,8)]:
+                #    spatial = _outputs[tdx0].reshape(-1,48,32)
+                #    temporal = (_outputs[tdx3]*_outputs[tdx1][:,:num_comps]*_outputs[tdx2][:,:num_comps]).reshape(-1,48,32).transpose(-1,-2)
+                #    local_vol_tvs += torch.abs(torch.matmul(spatial,temporal)).mean()
                 #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[0],_outputs[2][:,:num_comps]*_outputs[4][:,:num_comps]*_outputs[6])).mean()
                 #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[1],_outputs[2][:,:num_comps]*_outputs[5][:,:num_comps]*_outputs[7])).mean()
                 #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[3],_outputs[4][:,:num_comps]*_outputs[5][:,:num_comps]*_outputs[8])).mean()
-                local_vol_tvs += torch.abs(self.similarity_loss(_outputs[0].detach(),_outputs[6])).mean()
-                local_vol_tvs += torch.abs(self.similarity_loss(_outputs[1].detach(),_outputs[7])).mean()
-                local_vol_tvs += torch.abs(self.similarity_loss(_outputs[3].detach(),_outputs[8])).mean()
-                for cdx in range(centers.shape[0]):
-                    for tdx in [6,7,8]:
-                        outtie = _outputs[tdx].reshape(-1,48,32)
+                #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[0].detach(),_outputs[6])).mean()
+                #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[1].detach(),_outputs[7])).mean()
+                #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[3].detach(),_outputs[8])).mean()
+
+                cdxs = [cdx for cdx in range(center_num)]
+                random.shuffle(cdxs)
+                for cdx in cdxs[:1]:
+                    alt_cdxs = [xdx for xdx in range(center_num) if cdx != xdx]
+                    random.shuffle(alt_cdxs)
+                    alt_cdx = 2 #alt_cdxs[0]
+
+                    for tdx0,tdx1,tdx2,tdx3 in [(6,2,4,0),(7,2,5,1),(8,4,5,3)]:
+                        spatial = _outputs[tdx3].reshape(-1,48,32)
+                        temporal = (_outputs[tdx0]*_outputs[tdx1][:,:num_comps]*_outputs[tdx2][:,:num_comps]).reshape(-1,48,32)
                         nonzero = torch.nonzero(dists[:,cdx]).squeeze()
-                        new_outtie = outtie[nonzero].transpose(0,1)
-                        new_outtie_comp = torch.matmul(new_outtie,new_outtie.transpose(-1,-2))
-                        local_vol_tvs += -new_outtie_comp.mean()
+                        alt_nonzero = torch.nonzero(dists[:,alt_cdx]).squeeze()
+                        if alt_nonzero.shape[0] == 0:
+                            alt_nonzero = nonzero
+                        
+                        select_weights = weights[nonzero].reshape(-1,1)#.transpose(0,1) #48, num_select, 1
+                        select_alt_weights = weights[alt_nonzero].reshape(-1,1)#.transpose(0,1) #48, num_select, 1                        
+
+                        select_temporal = temporal[nonzero].reshape(-1,temporal.shape[-1])#.transpose(0,1) #* select_weights #48, num_select, 32
+                        select_alt_temporal = temporal[alt_nonzero].reshape(-1,temporal.shape[-1])#.transpose(0,1) #* select_weights #48, num_select, 32  
+                        select_spatial = spatial[nonzero].reshape(-1,spatial.shape[-1])#.transpose(0,1) #* select_weights
+                        #sim_loss = self.similarity_loss(select_temporal,select_temporal) 115 x 48  ==> 115 x 48 x 1 matmul 1 x 1 (115 x 48)
+                        select_alt_weights = torch.matmul(select_weights,select_alt_weights.transpose(-1,-2)) 
+                        select_weights = torch.matmul(select_weights,select_weights.transpose(-1,-2))
+
+                        #matmul_mask = torch.ones_like(select_weights)
+                        if cdx == alt_cdx:
+                            for matidx in range(0,select_alt_weights.shape[0],48):
+                                select_alt_weights[matidx:matidx+48,matidx:matidx+48] = 0
+
+                        select_weights = F.softmax(select_weights,dim=1)
+                        select_alt_weights = F.softmax(select_alt_weights,dim=1)
+                        
+                        temporal_sim_norms = torch.sqrt(torch.sum(select_temporal**2,dim=-1))
+                        alt_temporal_sim_norms = torch.sqrt(torch.sum(select_alt_temporal**2,dim=-1))                        
+                        spatial_sim_norms = torch.sqrt(torch.sum(select_spatial**2,dim=-1))
+                        spatial_sim_norms = temporal_sim_norms.unsqueeze(-1)*spatial_sim_norms.unsqueeze(-2) + 1e-8
+                        #temporal_sim_norms = temporal_sim_norms.unsqueeze(-1)*temporal_sim_norms.unsqueeze(-2) + 1e-8
+                        temporal_sim_norms = temporal_sim_norms.unsqueeze(-1)*alt_temporal_sim_norms.unsqueeze(-2) + 1e-8
+
+                        temporal_similarity = torch.matmul(select_temporal,select_alt_temporal.transpose(-1,-2)) / temporal_sim_norms
+                        #temporal_similarity = torch.matmul(select_temporal,select_temporal.transpose(-1,-2)) / temporal_sim_norms                       
+                        spatial_temporal_comp = torch.abs(torch.matmul(select_spatial,select_temporal.transpose(-1,-2)) / spatial_sim_norms) # 48, num_select, num_select
+                        #local_vol_tvs += -self.mask_layer(temporal_similarity,select_weights).mean()
+                        local_vol_tvs += -0.1*self.mask_layer(temporal_similarity,select_alt_weights).mean()                        
+                        #local_vol_tvs += spatial_temporal_comp.mean()
+                        local_vol_tvs += self.mask_layer(spatial_temporal_comp,select_weights).mean()                        
+                        #local_vol_tvs += -torch.sum(self.mask_layer(temporal_similarity,select_weights))#.mean()
+                        #local_vol_tvs += torch.sum(self.mask_layer(spatial_temporal_comp,select_weights))#.mean()                        
                 
             for grid_idx,grids in enumerate(field_grids):
                 grid_norm += torch.abs(1 - torch.norm(grids[0],2,0)).mean()
@@ -555,7 +607,7 @@ class KPlanesModel(Model):
                 #grid_norm += torch.norm(grids[7],2,0).mean()
                 #grid_norm += torch.norm(grids[8],2,0).mean()                
                 
-                continue
+                #continue
                 g2 = grids[2]                
                 g4 = grids[4]
                 g5 = grids[5]
@@ -729,15 +781,15 @@ class KPlanesModel(Model):
             if self.cosine_idx % 3000 == 0:
                 self.vol_tv_mult = np.clip(self.vol_tv_mult * 2,0,0.01)
                 self.conv_vol_tv_mult = np.clip(self.conv_vol_tv_mult*2,0,0.01)
-            '''
+            
             if self.conv_train_bool:
                 #loss_dict["vol_tvs"] = self.vol_tv_mult*(vol_tvs / (3*len(outputs_lst)))
                 #loss_dict["temporal_simm"] = self.conv_vol_tv_mult*temporal_simm / (3*len(outputs_lst))
-                loss_dict["vol_tvs"] = 0.01*(vol_tvs / (3*len(outputs_lst)))
-                loss_dict["temporal_simm"] = 0.001*temporal_simm / (3*len(outputs_lst))                                
+                loss_dict["vol_tvs"] = 0.1*(vol_tvs / (3*len(outputs_lst)))
+                loss_dict["temporal_simm"] = 0.01*temporal_simm / (3*len(outputs_lst))                                
             else:
                 loss_dict["conv_mlp"] = conv_mlp / (6*len(outputs_lst))
-            ''' 
+            
             loss_dict["local_vol_tvs"] = 0.01*local_vol_tvs / (3*len(outputs_lst))
             loss_dict["grid_norm"] = 0.01*grid_norm / (6*len(outputs_lst))
             

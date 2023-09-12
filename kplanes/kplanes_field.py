@@ -273,7 +273,7 @@ class KPlanesField(Field):
             directions = shift_directions_for_tcnn(directions)
             d = self.direction_encoding(directions)
             color_features = [d, density_embedding.view(-1, self.geo_feat_dim)]
-
+            
         if self.appearance_embedding_dim > 0:
             if self.training:
                 assert ray_samples.camera_indices is not None
