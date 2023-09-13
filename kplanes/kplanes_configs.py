@@ -168,6 +168,10 @@ kplanes_dynamic_method = MethodSpecification(
                 "optimizer": AdamOptimizerConfig(lr=1e-3, eps=1e-12),
                 "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=100000),
             },
+            "pose_delts": {
+                "optimizer": AdamOptimizerConfig(lr=1e-4, eps=1e-12),
+                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=200000),
+            },            
         },
         viewer=ViewerConfig(num_rays_per_chunk=1 << 12),
         vis="viewer",
