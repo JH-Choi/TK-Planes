@@ -202,7 +202,7 @@ class KPlanesModel(Model):
         self.conv_train_idx = 0
         self.conv_comp = torch.nn.ModuleList([])
         self.conv_mlp = torch.nn.ModuleList([])
-        start_layers = 4
+        start_layers = 3
         curr_dim_mult = 2
         for conv_idx in range(len(self.config.multiscale_res)):
             curr_dim = self.config.grid_feature_dim            
@@ -236,6 +236,10 @@ class KPlanesModel(Model):
         
         #self.conj = torch.nn.Parameter(torch.tensor([[1,-1,-1,-1]]),requires_grad=False)
         #self.quat = torch.nn.Parameter(torch.tensor([[1.0,0.0,0.0,0.0]]))
+        rot_angs = torch.nn.Parameter(torch.zeros(3,153))
+        pos_diff = torch.nn.Parameter(torch.zeros(153,3))
+        self.pos_idx = 0
+        self.camera_pose_delts = torch.nn.ParameterList([rot_angs,pos_diff])
         
         self.density_fns = []
         num_prop_nets = self.config.num_proposal_iterations
@@ -310,7 +314,10 @@ class KPlanesModel(Model):
     def get_param_groups(self) -> Dict[str, List[Parameter]]:
         param_groups = {
             "proposal_networks": list(self.proposal_networks.parameters()),
-            "fields": list(self.field.parameters())
+            "fields": list(self.field.parameters()),
+            "pose_delts": self.camera_pose_delts,
+            "conv_comp": list(self.conv_comp.parameters()),
+            "conv_mlp": list(self.conv_mlp.parameters())
         }
         return param_groups
 
@@ -358,32 +365,50 @@ class KPlanesModel(Model):
             exit(-1)
         
         return p
+
+    def get_rot_mat_torch(self,angs): #roll,yaw,pitch):
+        #roll = torch.clip(roll,-3,3) * torch.pi / 180
+        #yaw = yaw * torch.pi / 180
+        #pitch = torch.clip(pitch,-75,-40) * torch.pi / 180
+        roll = angs[0]
+        yaw = angs[1]
+        pitch = angs[2]
+        rz = torch.stack([torch.stack([torch.cos(roll), -torch.sin(roll), torch.zeros_like(roll)]),
+                          torch.stack([torch.sin(roll), torch.cos(roll), torch.zeros_like(roll)]),
+                          torch.stack([torch.zeros_like(roll),torch.zeros_like(roll),torch.ones_like(roll)])])
+        ry = torch.stack([torch.stack([torch.cos(yaw), torch.zeros_like(roll), torch.sin(yaw)]),
+                          torch.stack([torch.zeros_like(roll), torch.ones_like(roll), torch.zeros_like(roll)]),
+                          torch.stack([-torch.sin(yaw), torch.zeros_like(roll), torch.cos(yaw)])])
+        rx = torch.stack([torch.stack([torch.ones_like(roll), torch.zeros_like(roll), torch.zeros_like(roll)]),
+                          torch.stack([torch.zeros_like(roll), torch.cos(pitch), -torch.sin(pitch)]),
+                          torch.stack([torch.zeros_like(roll), torch.sin(pitch), torch.cos(pitch)])])
+        
+
+        rz = rz.permute(2,0,1)
+        ry = ry.permute(2,0,1)
+        rx = rx.permute(2,0,1)
+
+        R = torch.matmul(rz.squeeze(),torch.matmul(ry.squeeze(),rx.squeeze()))
+
+        return R
     
     def get_outputs(self, ray_bundle: RayBundle):
         density_fns = self.density_fns
         if ray_bundle.times is not None:
             density_fns = [functools.partial(f, times=ray_bundle.times) for f in density_fns]
 
-        '''
-        zero_pad = torch.zeros((ray_bundle.directions.shape[0],)) #,dtype=ray_bundle.directions.type(),device=ray_bundle.directions.device)
-        zero_pad = zero_pad.type(ray_bundle.directions.type()).to(ray_bundle.directions.device)
-        new_dirs = torch.cat([zero_pad.unsqueeze(1),ray_bundle.directions],dim=1)
-        new_origs = torch.cat([zero_pad.unsqueeze(1),ray_bundle.origins],dim=1)        
-        new_ends = new_origs + new_dirs
         
-        new_origs = self.quat_mult(
-            self.quat_mult(self.quat,new_origs),
-            (self.quat*self.conj))[:,1:]
-
-        new_ends = self.quat_mult(
-            self.quat_mult(self.quat,new_ends),
-            (self.quat*self.conj))[:,1:]
-
-        new_dirs = new_ends - new_origs
+        rot_angs = self.camera_pose_delts[0]
+        pos_diff = self.camera_pose_delts[1]
         
-        ray_bundle.origins = new_origs
-        ray_bundle.directions = new_dirs / torch.norm(new_dirs,2,1).unsqueeze(-1)
-        '''
+        R = self.get_rot_mat_torch(torch.clip(rot_angs,-0.01,0.01))
+        selected_R = R[ray_bundle.camera_indices.squeeze()]
+        new_dirs = torch.matmul(selected_R,ray_bundle.directions.unsqueeze(-1)).squeeze()
+        selected_delts = pos_diff[ray_bundle.camera_indices.squeeze()]
+        new_origins = ray_bundle.origins + torch.clip(selected_delts,-0.2,0.2)
+        ray_bundle.origins = new_origins
+        ray_bundle.directions = new_dirs #/ torch.norm(new_dirs,2,1).unsqueeze(-1)
+        
         
         ray_samples, weights_list, ray_samples_list = self.proposal_sampler(
             ray_bundle, density_fns=density_fns
@@ -548,7 +573,7 @@ class KPlanesModel(Model):
 
                 cdxs = [cdx for cdx in range(center_num)]
                 random.shuffle(cdxs)
-                for cdx in cdxs[:1]:
+                for cdx in cdxs[:4]:
                     alt_cdxs = [xdx for xdx in range(center_num) if cdx != xdx]
                     random.shuffle(alt_cdxs)
                     alt_cdx = 2 #alt_cdxs[0]
@@ -597,6 +622,7 @@ class KPlanesModel(Model):
                         #local_vol_tvs += torch.sum(self.mask_layer(spatial_temporal_comp,select_weights))#.mean()                        
                 
             for grid_idx,grids in enumerate(field_grids):
+                continue
                 grid_norm += torch.abs(1 - torch.norm(grids[0],2,0)).mean()
                 grid_norm += torch.abs(1 - torch.norm(grids[1],2,0)).mean()
                 grid_norm += torch.abs(1 - torch.norm(grids[3],2,0)).mean()
@@ -607,7 +633,7 @@ class KPlanesModel(Model):
                 #grid_norm += torch.norm(grids[7],2,0).mean()
                 #grid_norm += torch.norm(grids[8],2,0).mean()                
                 
-                #continue
+                continue
                 g2 = grids[2]                
                 g4 = grids[4]
                 g5 = grids[5]
@@ -627,8 +653,9 @@ class KPlanesModel(Model):
                 #g42 = g4_t * g2 = (y - t) * (t - x) = y - x
 
                 g24 = torch.matmul(g4[:num_comps].transpose(-1,-2),g2[:num_comps])
-                #g24mask = torch.sigmoid(g24) #* g6
-                g24 = g24 * g6
+                #g24_mask = torch.matmul(g4[num_comps:].transpose(-1,-2),g2[num_comps:])
+
+                g24 = g24 * g6 #* g24_mask
                 #g24 = g6
                 #g24 = self.mask_layer(g6,g24mask)
                 #g24 = F.normalize(g24,2,0)
@@ -648,8 +675,9 @@ class KPlanesModel(Model):
                 g24 = g24.reshape(g24c,-1)
                 
                 g25 = torch.matmul(g5[:num_comps].transpose(-1,-2),g2[:num_comps])
-                #g25mask = torch.sigmoid(g25) #* g7
-                g25 = g25 * g7
+                #g25_mask = torch.matmul(g5[num_comps:].transpose(-1,-2),g2[num_comps:])                
+
+                g25 = g25 * g7 #* g25_mask
                 #g25 = g7
                 #g25 = self.mask_layer(g7,g25mask)
                 #g25 = F.normalize(g25,2,0)
@@ -668,8 +696,9 @@ class KPlanesModel(Model):
                 g25 = g25.reshape(g25c,-1)
                 
                 g45 = torch.matmul(g5[:num_comps].transpose(-1,-2),g4[:num_comps])
-                #g45mask = torch.sigmoid(g45) #* g8
-                g45 = g45 * g8
+                #g45_mask = torch.matmul(g5[num_comps:].transpose(-1,-2),g4[num_comps:])                
+
+                g45 = g45 * g8 #* g45_mask
                 #g45 = g8
                 #g45 = self.mask_layer(g8,g45mask)
                 #g45 = F.normalize(g45,2,0)
@@ -781,17 +810,18 @@ class KPlanesModel(Model):
             if self.cosine_idx % 3000 == 0:
                 self.vol_tv_mult = np.clip(self.vol_tv_mult * 2,0,0.01)
                 self.conv_vol_tv_mult = np.clip(self.conv_vol_tv_mult*2,0,0.01)
-            
+            '''
             if self.conv_train_bool:
                 #loss_dict["vol_tvs"] = self.vol_tv_mult*(vol_tvs / (3*len(outputs_lst)))
                 #loss_dict["temporal_simm"] = self.conv_vol_tv_mult*temporal_simm / (3*len(outputs_lst))
-                loss_dict["vol_tvs"] = 0.1*(vol_tvs / (3*len(outputs_lst)))
+                loss_dict["vol_tvs"] = 0.01*(vol_tvs / (3*len(outputs_lst)))
                 loss_dict["temporal_simm"] = 0.01*temporal_simm / (3*len(outputs_lst))                                
             else:
                 loss_dict["conv_mlp"] = conv_mlp / (6*len(outputs_lst))
-            
+            '''
+            loss_dict["camera_delts"] = 10*(torch.abs(self.camera_pose_delts[0]).mean() + torch.abs(self.camera_pose_delts[1]).mean())
             loss_dict["local_vol_tvs"] = 0.01*local_vol_tvs / (3*len(outputs_lst))
-            loss_dict["grid_norm"] = 0.01*grid_norm / (6*len(outputs_lst))
+            #loss_dict["grid_norm"] = 0.01*grid_norm / (6*len(outputs_lst))
             
             loss_dict["time_masks"] = time_mask_loss
             
