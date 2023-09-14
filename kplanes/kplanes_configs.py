@@ -118,33 +118,33 @@ kplanes_olddynamic_method = MethodSpecification(
 kplanes_dynamic_method = MethodSpecification(
     config=TrainerConfig(
         method_name="kplanes-dynamic",
-        steps_per_eval_batch=500,
+        steps_per_eval_batch=4000,
         steps_per_save=2000,
-        steps_per_eval_all_images=200000,
-        max_num_iterations=200001,
+        steps_per_eval_all_images=100000,
+        max_num_iterations=100001,
         mixed_precision=True,
         pipeline=VanillaPipelineConfig(
             datamanager=VanillaDataManagerConfig(
                 dataparser=OkutamaDataParserConfig(),
                 #dataparser=DNeRFDataParserConfig(),                                
                 train_num_rays_per_batch=4196 + 512,
-                eval_num_rays_per_batch=8,
+                eval_num_rays_per_batch=1024,
                 camera_res_scale_factor=0.5,  # DNeRF train on 400x400
             ),
             model=KPlanesModelConfig(
                 eval_num_rays_per_chunk=1 << 12,
-                grid_base_resolution=[128, 128, 64, 77],  # time-resolution should be half the time-steps
+                grid_base_resolution=[64, 64, 32, 77],  # time-resolution should be half the time-steps
                 grid_feature_dim=32,
                 near_plane=5,
-                far_plane=350,
+                far_plane=500,
                 num_samples=48,
                 concat_features_across_scales=True,
                 multiscale_res=[1,2,4],
                 is_contracted=False,
                 proposal_net_args_list=[
                     # time-resolution should be half the time-steps
+                    {"num_output_coords": 8, "resolution": [64, 64, 32, 77]},
                     {"num_output_coords": 8, "resolution": [128, 128, 64, 77]},
-                    {"num_output_coords": 8, "resolution": [256, 256, 128, 77]},
                 ],
                 num_proposal_samples=(64,64),
                 loss_coefficients={
@@ -162,24 +162,16 @@ kplanes_dynamic_method = MethodSpecification(
         optimizers={
             "proposal_networks": {
                 "optimizer": AdamOptimizerConfig(lr=1e-3, eps=1e-12),
-                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=200000),
+                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=100000),
             },
             "fields": {
                 "optimizer": AdamOptimizerConfig(lr=1e-3, eps=1e-12),
-                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=200000),
+                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=100000),
             },
             "pose_delts": {
-                "optimizer": AdamOptimizerConfig(lr=5e-4, eps=1e-12),
-                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=200000),
-            },
-            "conv_comp": {
                 "optimizer": AdamOptimizerConfig(lr=1e-3, eps=1e-12),
-                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=200000),
+                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=100000),
             },
-            "conv_mlp": {
-                "optimizer": AdamOptimizerConfig(lr=1e-3, eps=1e-12),
-                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=200000),
-            },                                    
         },
         viewer=ViewerConfig(num_rays_per_chunk=1 << 12),
         vis="viewer",

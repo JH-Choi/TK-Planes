@@ -858,15 +858,15 @@ class KPlanesEncoding(Encoding):
                                       outputs[8][:,:self.num_components])            
             '''
             time_mask = time_mask > 10
-            xyz_static = self.mask_layer(outputs[0]*outputs[1]*outputs[3],~time_mask)
-            #xyz_static = outputs[0]*outputs[1]*outputs[3]           
+            #xyz_static = self.mask_layer(outputs[0]*outputs[1]*outputs[3],~time_mask)
+            xyz_static = outputs[0]*outputs[1]*outputs[3]           
             #static_mask = torch.clip(torch.randint(0,5,(xyz_static.shape[0] // num_ray_samps,1)),0,1).to(xyz_static.device)
-            xyz_temporal = self.mask_layer(outputs[2][:,:self.num_components]*outputs[4][:,:self.num_components]*
-            #xyz_temporal = (outputs[2][:,:self.num_components]*outputs[4][:,:self.num_components]*                                           
+            #xyz_temporal = self.mask_layer(outputs[2][:,:self.num_components]*outputs[4][:,:self.num_components]*
+            xyz_temporal = (outputs[2][:,:self.num_components]*outputs[4][:,:self.num_components]*                                           
                                            outputs[4][:,:self.num_components]*outputs[5][:,:self.num_components]*outputs[2][:,:self.num_components]*
                                            outputs[5][:,:self.num_components]*#outputs[2][:,:self.num_components]*
-                                           #outputs[6]*outputs[7]*outputs[8])
-                                           outputs[6]*outputs[7]*outputs[8],time_mask)                                           
+                                           outputs[6]*outputs[7]*outputs[8])
+            #                               outputs[6]*outputs[7]*outputs[8],time_mask)                                           
             #temporal_mask = torch.clip(torch.randint(0,5,(xyz_temporal.shape[0] // num_ray_samps,1)),0,1).to(xyz_temporal.device)
 
             #outputs.append(xyz_static)
