@@ -358,11 +358,11 @@ class KPlanesModel(Model):
         rot_angs = self.camera_pose_delts[0]
         pos_diff = self.camera_pose_delts[1]
 
-        R = self.get_rot_mat_torch(torch.clip(rot_angs,-0.01,0.01))
+        R = self.get_rot_mat_torch(torch.clip(rot_angs,-0.03,0.03))
         selected_R = R[ray_bundle.camera_indices.squeeze()]
         new_dirs = torch.matmul(selected_R,ray_bundle.directions.unsqueeze(-1)).squeeze()
         selected_delts = pos_diff[ray_bundle.camera_indices.squeeze()]
-        new_origins = ray_bundle.origins + torch.clip(selected_delts,-0.2,0.2)
+        new_origins = ray_bundle.origins + torch.clip(selected_delts,-0.5,0.5)
         ray_bundle.origins = new_origins
         ray_bundle.directions = new_dirs
         
@@ -465,7 +465,7 @@ class KPlanesModel(Model):
 
             loss_dict = misc.scale_dict(loss_dict, self.config.loss_coefficients)
 
-        loss_dict["pose_delts"] = torch.abs(self.camera_pose_delts[0]).mean() + torch.abs(self.camera_pose_delts[1]).mean()
+        loss_dict["pose_delts"] = 0.1*(torch.abs(self.camera_pose_delts[0]).mean() + torch.abs(self.camera_pose_delts[1]).mean())
             
         return loss_dict
 
