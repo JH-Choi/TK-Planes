@@ -549,7 +549,7 @@ class KPlanesModel(Model):
             local_vol_tvs = 0.0
             temporal_simm = 0.0
             self.conv_train_idx = (self.conv_train_idx + 1) % self.conv_switch
-            if self.conv_train_idx == 0 and False:
+            if self.conv_train_idx == 0:
                 for m in self.conv_comp:
                     for param in m.parameters():
                         param.requires_grad = self.conv_train_bool
@@ -573,7 +573,7 @@ class KPlanesModel(Model):
 
                 cdxs = [cdx for cdx in range(center_num)]
                 random.shuffle(cdxs)
-                for cdx in cdxs[:4]:
+                for cdx in cdxs[:3]:
                     alt_cdxs = [xdx for xdx in range(center_num) if cdx != xdx]
                     random.shuffle(alt_cdxs)
                     alt_cdx = 2 #alt_cdxs[0]
@@ -622,7 +622,7 @@ class KPlanesModel(Model):
                         #local_vol_tvs += torch.sum(self.mask_layer(spatial_temporal_comp,select_weights))#.mean()                        
                 
             for grid_idx,grids in enumerate(field_grids):
-                continue
+                #continue
                 grid_norm += torch.abs(1 - torch.norm(grids[0],2,0)).mean()
                 grid_norm += torch.abs(1 - torch.norm(grids[1],2,0)).mean()
                 grid_norm += torch.abs(1 - torch.norm(grids[3],2,0)).mean()
@@ -633,7 +633,7 @@ class KPlanesModel(Model):
                 #grid_norm += torch.norm(grids[7],2,0).mean()
                 #grid_norm += torch.norm(grids[8],2,0).mean()                
                 
-                continue
+                #continue
                 g2 = grids[2]                
                 g4 = grids[4]
                 g5 = grids[5]
@@ -810,7 +810,7 @@ class KPlanesModel(Model):
             if self.cosine_idx % 3000 == 0:
                 self.vol_tv_mult = np.clip(self.vol_tv_mult * 2,0,0.01)
                 self.conv_vol_tv_mult = np.clip(self.conv_vol_tv_mult*2,0,0.01)
-            '''
+            
             if self.conv_train_bool:
                 #loss_dict["vol_tvs"] = self.vol_tv_mult*(vol_tvs / (3*len(outputs_lst)))
                 #loss_dict["temporal_simm"] = self.conv_vol_tv_mult*temporal_simm / (3*len(outputs_lst))
@@ -818,8 +818,8 @@ class KPlanesModel(Model):
                 loss_dict["temporal_simm"] = 0.01*temporal_simm / (3*len(outputs_lst))                                
             else:
                 loss_dict["conv_mlp"] = conv_mlp / (6*len(outputs_lst))
-            '''
-            loss_dict["camera_delts"] = 10*(torch.abs(self.camera_pose_delts[0]).mean() + torch.abs(self.camera_pose_delts[1]).mean())
+            
+            loss_dict["camera_delts"] = (torch.abs(self.camera_pose_delts[0]).mean() + torch.abs(self.camera_pose_delts[1]).mean())
             loss_dict["local_vol_tvs"] = 0.01*local_vol_tvs / (3*len(outputs_lst))
             #loss_dict["grid_norm"] = 0.01*grid_norm / (6*len(outputs_lst))
             
