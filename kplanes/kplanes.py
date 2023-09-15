@@ -576,8 +576,8 @@ def l1_time_planes(multi_res_grids: List[torch.Tensor]) -> float:
     num_planes = 0
     for grids in multi_res_grids:
         for grid_id in time_planes:
-            #total += torch.abs(1 - grids[grid_id]).mean()
-            total += torch.abs(grids[grid_id][:num_comps]).mean()            
+            total += torch.abs(1 - grids[grid_id]).mean()
+            #total += torch.abs(grids[grid_id][:num_comps]).mean()            
             num_planes += 1
 
     return total / num_planes
