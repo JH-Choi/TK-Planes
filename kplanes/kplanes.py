@@ -276,7 +276,7 @@ class KPlanesModel(Model):
         param_groups = {
             "proposal_networks": list(self.proposal_networks.parameters()),
             "fields": list(self.field.parameters()),
-            "pose_delts": self.camera_pose_delts
+            #"pose_delts": self.camera_pose_delts
         }
         return param_groups
 
@@ -355,6 +355,7 @@ class KPlanesModel(Model):
         if ray_bundle.times is not None:
             density_fns = [functools.partial(f, times=ray_bundle.times) for f in density_fns]
 
+        '''
         rot_angs = self.camera_pose_delts[0]
         pos_diff = self.camera_pose_delts[1]
 
@@ -365,7 +366,7 @@ class KPlanesModel(Model):
         new_origins = ray_bundle.origins + torch.clip(selected_delts,-0.2,0.2)
         ray_bundle.origins = new_origins
         ray_bundle.directions = new_dirs
-        
+        '''
         ray_samples, weights_list, ray_samples_list = self.proposal_sampler(
             ray_bundle, density_fns=density_fns
         )
@@ -465,7 +466,7 @@ class KPlanesModel(Model):
 
             loss_dict = misc.scale_dict(loss_dict, self.config.loss_coefficients)
 
-        loss_dict["pose_delts"] = torch.abs(self.camera_pose_delts[0]).mean() + torch.abs(self.camera_pose_delts[1]).mean()
+        #loss_dict["pose_delts"] = torch.abs(self.camera_pose_delts[0]).mean() + torch.abs(self.camera_pose_delts[1]).mean()
             
         return loss_dict
 

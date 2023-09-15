@@ -94,7 +94,7 @@ class PixelSampler:
                 num_rays_per_batch, num_images, image_height, image_width, mask=batch["mask"], device=device
             )
         elif "time_mask" in batch:
-            dynamic_num_rays_per_batch = 512
+            dynamic_num_rays_per_batch = 1024
             static_num_rays_per_batch = num_rays_per_batch - dynamic_num_rays_per_batch
             static_indices = self.sample_method(static_num_rays_per_batch, num_images, image_height, image_width, mask=~batch["time_mask"].unsqueeze(-1),device=device)
             dynamic_indices = self.sample_method(dynamic_num_rays_per_batch, num_images, image_height, image_width, mask=batch["time_mask"].unsqueeze(-1),device=device)
