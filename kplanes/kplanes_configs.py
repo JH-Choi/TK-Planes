@@ -127,34 +127,34 @@ kplanes_dynamic_method = MethodSpecification(
             datamanager=VanillaDataManagerConfig(
                 dataparser=OkutamaDataParserConfig(),
                 #dataparser=DNeRFDataParserConfig(),                                
-                train_num_rays_per_batch=4196 + 512,
-                eval_num_rays_per_batch=1024,
+                train_num_rays_per_batch=4196 + 1024,
+                eval_num_rays_per_batch=256,
                 camera_res_scale_factor=0.5,  # DNeRF train on 400x400
             ),
             model=KPlanesModelConfig(
-                eval_num_rays_per_chunk=1 << 12,
-                grid_base_resolution=[64, 64, 32, 77],  # time-resolution should be half the time-steps
+                eval_num_rays_per_chunk=1 << 11,
+                grid_base_resolution=[128, 128, 64, 77],  # time-resolution should be half the time-steps
                 grid_feature_dim=32,
                 near_plane=5,
-                far_plane=500,
+                far_plane=350,
                 num_samples=48,
                 concat_features_across_scales=True,
                 multiscale_res=[1,2,4],
                 is_contracted=False,
                 proposal_net_args_list=[
                     # time-resolution should be half the time-steps
-                    {"num_output_coords": 8, "resolution": [64, 64, 32, 77]},
                     {"num_output_coords": 8, "resolution": [128, 128, 64, 77]},
+                    {"num_output_coords": 8, "resolution": [256, 256, 128, 77]},
                 ],
                 num_proposal_samples=(64,64),
                 loss_coefficients={
                     "interlevel": 1.0,
                     "distortion": 0.01,
-                    "plane_tv": 0.05,
+                    "plane_tv": 0.1,
                     "plane_tv_proposal_net": 0.0001,
                     "l1_time_planes": 0.001,
                     "l1_time_planes_proposal_net": 0.0001,
-                    "time_smoothness": 0.05,
+                    "time_smoothness": 0.1,
                     "time_smoothness_proposal_net": 0.001,
                 },
             ),
@@ -168,10 +168,10 @@ kplanes_dynamic_method = MethodSpecification(
                 "optimizer": AdamOptimizerConfig(lr=1e-3, eps=1e-12),
                 "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=100000),
             },
-            "pose_delts": {
-                "optimizer": AdamOptimizerConfig(lr=1e-3, eps=1e-12),
-                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=100000),
-            },
+            #"pose_delts": {
+            #    "optimizer": AdamOptimizerConfig(lr=1e-6, eps=1e-12),
+            #    "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=100000),
+            #},
         },
         viewer=ViewerConfig(num_rays_per_chunk=1 << 12),
         vis="viewer",

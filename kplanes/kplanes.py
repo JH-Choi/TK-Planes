@@ -276,7 +276,7 @@ class KPlanesModel(Model):
         param_groups = {
             "proposal_networks": list(self.proposal_networks.parameters()),
             "fields": list(self.field.parameters()),
-            "pose_delts": self.camera_pose_delts,
+            #"pose_delts": self.camera_pose_delts,
         }
         return param_groups
 
@@ -356,24 +356,26 @@ class KPlanesModel(Model):
         if ray_bundle.times is not None:
             density_fns = [functools.partial(f, times=ray_bundle.times) for f in density_fns]
 
-        
+        '''
         rot_angs = self.camera_pose_delts[0]
         pos_diff = self.camera_pose_delts[1]
         
-        R = self.get_rot_mat_torch(torch.clip(rot_angs,-0.017,0.017))
+        R = self.get_rot_mat_torch(torch.clip(rot_angs,-0.01,0.01))
         selected_R = R[ray_bundle.camera_indices.squeeze()]
         new_dirs = torch.matmul(selected_R,ray_bundle.directions.unsqueeze(-1)).squeeze()
         selected_delts = pos_diff[ray_bundle.camera_indices.squeeze()]
-        new_origins = ray_bundle.origins + torch.clip(selected_delts,-0.5,0.5)
+        new_origins = ray_bundle.origins + torch.clip(selected_delts,-0.25,0.25)
         ray_bundle.origins = new_origins
         ray_bundle.directions = new_dirs #/ torch.norm(new_dirs,2,1).unsqueeze(-1)
+        self.rot_angs = rot_angs[:,ray_bundle.camera_indices.squeeze()].transpose(-1,-2)
+        self.pos_diff = pos_diff[ray_bundle.camera_indices.squeeze(),:]
         
 
         self.pos_idx = (self.pos_idx + 1) % 1000
         if self.pos_idx == 0:
             print(rot_angs)
             print(pos_diff)
-        
+        '''
         ray_samples, weights_list, ray_samples_list = self.proposal_sampler(
             ray_bundle, density_fns=density_fns
         )
@@ -461,6 +463,9 @@ class KPlanesModel(Model):
         #print("SUM: {}".format(torch.sum(image_mask)))
         #exit(-1)
         image_mask_bool = (image_mask > 10).to(image.dtype)
+        #non_zero_idxs = torch.nonzero(image_mask_bool)[:,0]
+
+        #image_diff = torch.abs(image - outputs["rgb"].detach()).mean(1).unsqueeze(-1)#[non_zero_idxs]
 
         mask_image = mask_image / 255.
         #image = image*(1 - image_mask_bool) + mask_image*image_mask_bool
@@ -499,12 +504,12 @@ class KPlanesModel(Model):
                 #    spatial = _outputs[tdx0].reshape(-1,48,32)
                 #    temporal = (_outputs[tdx3]*_outputs[tdx1][:,:num_comps]*_outputs[tdx2][:,:num_comps]).reshape(-1,48,32).transpose(-1,-2)
                 #    local_vol_tvs += torch.abs(torch.matmul(spatial,temporal)).mean()
-                local_vol_tvs += torch.abs(self.similarity_loss(_outputs[0],_outputs[2][:,:num_comps]*_outputs[4][:,:num_comps]*_outputs[6])).mean()
-                local_vol_tvs += torch.abs(self.similarity_loss(_outputs[1],_outputs[2][:,:num_comps]*_outputs[5][:,:num_comps]*_outputs[7])).mean()
-                local_vol_tvs += torch.abs(self.similarity_loss(_outputs[3],_outputs[4][:,:num_comps]*_outputs[5][:,:num_comps]*_outputs[8])).mean()
-                #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[0].detach(),_outputs[6])).mean()
-                #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[1].detach(),_outputs[7])).mean()
-                #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[3].detach(),_outputs[8])).mean()
+                #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[0],_outputs[2][:,:num_comps]*_outputs[4][:,:num_comps]*_outputs[6])).mean()
+                #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[1],_outputs[2][:,:num_comps]*_outputs[5][:,:num_comps]*_outputs[7])).mean()
+                #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[3],_outputs[4][:,:num_comps]*_outputs[5][:,:num_comps]*_outputs[8])).mean()
+                local_vol_tvs += torch.abs(self.similarity_loss(_outputs[0],_outputs[6])).mean()
+                local_vol_tvs += torch.abs(self.similarity_loss(_outputs[1],_outputs[7])).mean()
+                local_vol_tvs += torch.abs(self.similarity_loss(_outputs[3],_outputs[8])).mean()
 
                 
             #for grid_idx,grids in enumerate(field_grids):
@@ -513,8 +518,13 @@ class KPlanesModel(Model):
             #    grid_norm += torch.abs(1 - torch.norm(grids[1],2,0)).mean()
             #    grid_norm += torch.abs(1 - torch.norm(grids[3],2,0)).mean()
 
-            loss_dict["camera_delts"] = (10*torch.abs(self.camera_pose_delts[0]).mean() + torch.abs(self.camera_pose_delts[1]).mean())
-            loss_dict["local_vol_tvs"] = local_vol_tvs / (3*len(outputs_lst))
+            #loss_dict["camera_delts"] = (self.mask_layer(torch.abs(self.rot_angs)*image_diff,image_mask_bool)).mean()
+            #loss_dict["camera_delts"] += (self.mask_layer(torch.abs(self.pos_diff)*image_diff,image_mask_bool)).mean()
+            #loss_dict["camera_delts"] = (torch.abs(self.rot_angs[non_zero_idxs])*image_diff).mean()
+            #loss_dict["camera_delts"] += (torch.abs(self.pos_diff[non_zero_idxs])*image_diff).mean()
+            #loss_dict["camera_delts"] = (torch.abs(self.rot_angs*image_diff)).mean()
+            #loss_dict["camera_delts"] += (torch.abs(self.pos_diff*image_diff)).mean()
+            loss_dict["local_vol_tvs"] = 0.01*local_vol_tvs / (3*len(outputs_lst))
             #loss_dict["grid_norm"] = 0.01*grid_norm / (6*len(outputs_lst))
             
             loss_dict["time_masks"] = time_mask_loss
@@ -620,7 +630,7 @@ def l1_time_planes(multi_res_grids: List[torch.Tensor]) -> float:
     Returns:
          L1 distance from the multiplicative identity (1)
     """
-    time_planes = [2, 4, 5, 6, 7, 8]  # These are the spatiotemporal planes
+    time_planes = [2, 4, 5]  # These are the spatiotemporal planes
     #time_planes = [4, 5, 7, 8, 10, 11]  # These are the spatiotemporal planes    
     total = 0.0
     num_comps = multi_res_grids[0][0].shape[0]
