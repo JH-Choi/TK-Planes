@@ -89,11 +89,16 @@ class PixelSampler:
         device = batch["image"].device
         num_images, image_height, image_width, _ = batch["image"].shape
 
+        image_height = image_height // 8
+        image_width = image_width // 8
+
+        num_rays_per_batch = image_height * image_width
+        
         if "mask" in batch:
             indices = self.sample_method(
                 num_rays_per_batch, num_images, image_height, image_width, mask=batch["mask"], device=device
             )
-        elif "time_mask" in batch:
+        elif "time_mask" in batch and False:
             dynamic_num_rays_per_batch = 1024
             static_num_rays_per_batch = num_rays_per_batch - dynamic_num_rays_per_batch
             time_mask = torch.sum(batch["time_mask"],-1) > 10
@@ -103,6 +108,15 @@ class PixelSampler:
         else:
             indices = self.sample_method(num_rays_per_batch, num_images, image_height, image_width, device=device)
 
+        print(indices)
+        print(indices.shape)
+        print(num_images)
+        s = set()
+        for idx in range(indices.shape[0]):
+            v = indices[idx].detach().cpu().numpy()
+            s.add((v[0],v[1],v[2]))
+        print(len(s))
+        exit(-1)
         c, y, x = (i.flatten() for i in torch.split(indices, 1, dim=-1))
         c, y, x = c.cpu(), y.cpu(), x.cpu()
         collated_batch = {
