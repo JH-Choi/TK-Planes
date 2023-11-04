@@ -115,7 +115,7 @@ class KPlanesField(Field):
 
         self.register_buffer("aabb", aabb)
         self.num_images = num_images
-        self.geo_feat_dim = (grid_feature_dim // 2) - 1 #geo_feat_dim
+        self.geo_feat_dim = (grid_feature_dim // 2) #- 1 #geo_feat_dim
         self.grid_base_resolution = list(grid_base_resolution)
         self.concat_across_scales = concat_across_scales
         self.spatial_distortion = spatial_distortion
@@ -175,34 +175,35 @@ class KPlanesField(Field):
         else:
             self.sigma_net = tcnn.Network(
                 n_input_dims=self.feature_dim,
-                n_output_dims=self.geo_feat_dim + 1,
+                n_output_dims=self.geo_feat_dim + 256, #+ 1,
                 network_config={
                     "otype": "CutlassMLP", #"FullyFusedMLP",
                     "activation": "ReLU",
                     "output_activation": "None",
-                    "n_neurons": 64, #64
-                    "n_hidden_layers": 2, #1
+                    "n_neurons": 2048, #64
+                    "n_hidden_layers": 1, #1
                 },
             )
             self.direction_encoding = tcnn.Encoding(
                 n_input_dims=3,
                 encoding_config={
                     "otype": "SphericalHarmonics",
-                    "degree": 4,
+                    "degree": 8, #4,
                 },
             )
             in_dim_color = (
                 self.direction_encoding.n_output_dims + self.geo_feat_dim + self.appearance_embedding_dim
             )
+            
             self.color_net = tcnn.Network(
                 n_input_dims=in_dim_color,
-                n_output_dims=3,
+                n_output_dims=256, #3,
                 network_config={
                     "otype": "CutlassMLP", #"FullyFusedMLP",
                     "activation": "ReLU",
-                    "output_activation": "Sigmoid",
-                    "n_neurons": 64, #64
-                    "n_hidden_layers": 3, #2
+                    "output_activation": "None", #"Sigmoid",
+                    "n_neurons": 1024, #64
+                    "n_hidden_layers": 2, #2
                 },
             )
 
@@ -251,7 +252,7 @@ class KPlanesField(Field):
             density_before_activation = self.sigma_net(features).view(*ray_samples.frustums.shape, -1)
         else:
             features = self.sigma_net(features).view(*ray_samples.frustums.shape, -1)
-            features, density_before_activation = torch.split(features, [self.geo_feat_dim, 1], dim=-1)
+            features, density_before_activation = torch.split(features, [self.geo_feat_dim, 256], dim=-1) #1], dim=-1)
 
         # Rectifying the density with an exponential is much more stable than a ReLU or
         # softplus, because it enables high post-activation (float32) density outputs
@@ -304,6 +305,7 @@ class KPlanesField(Field):
             rgb = torch.sigmoid(rgb).view(*output_shape, -1).to(directions)
         else:
             rgb = self.color_net(color_features).view(*output_shape, -1)
+
 
         return {FieldHeadNames.RGB: rgb, "vol_tvs": self.vol_tvs}
 

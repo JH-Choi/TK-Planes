@@ -454,7 +454,8 @@ class VanillaDataManager(DataManager, Generic[TDataset]):
         CONSOLE.print("Setting up training dataset...")
         self.train_image_dataloader = CacheDataloader(
             self.train_dataset,
-            num_images_to_sample_from=1, #self.config.train_num_images_to_sample_from,
+            num_images_to_sample_from= 1, 
+            #num_images_to_sample_from=self.config.train_num_images_to_sample_from,            
             num_times_to_repeat_images=self.config.train_num_times_to_repeat_images,
             device=self.device,
             num_workers=self.world_size * 4,

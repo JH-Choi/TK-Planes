@@ -1,3 +1,4 @@
+
 # Copyright 2022 the Regents of the University of California, Nerfstudio Team and contributors. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -96,7 +97,7 @@ class Okutama(DataParser):
 
         # in x,y,z order
         camera_to_world[..., 3] *= self.scale_factor
-        scene_box = SceneBox(aabb=torch.tensor([[-30, -30, -28], [30, 30, 2]], dtype=torch.float32))
+        scene_box = SceneBox(aabb=torch.tensor([[-4, -4, -3.75], [4, 4, 0.25]], dtype=torch.float32))
 
         cameras = Cameras(
             camera_to_worlds=camera_to_world,

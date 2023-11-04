@@ -32,7 +32,7 @@ class PixelSampler:
         keep_full_image: whether or not to include a reference to the full image in returned batch
     """
 
-    def __init__(self, num_rays_per_batch: int, keep_full_image: bool = False, **kwargs) -> None:
+    def __init__(self, num_rays_per_batch: int, keep_full_image: bool = True, **kwargs) -> None:
         self.kwargs = kwargs
         self.num_rays_per_batch = num_rays_per_batch
         self.keep_full_image = keep_full_image
@@ -53,6 +53,7 @@ class PixelSampler:
         image_width: int,
         mask: Optional[Tensor] = None,
         device: Union[torch.device, str] = "cpu",
+        all_pixels: bool = False,
     ) -> Int[Tensor, "batch_size 3"]:
         """
         Naive pixel sampler, uniformly samples across all possible pixels of all possible images.
@@ -66,6 +67,14 @@ class PixelSampler:
             nonzero_indices = torch.nonzero(mask[..., 0], as_tuple=False)
             chosen_indices = random.sample(range(len(nonzero_indices)), k=batch_size)
             indices = nonzero_indices[chosen_indices].to(device)
+        elif all_pixels:
+            interleave_num = batch_size // num_images
+            num_imgs = torch.arange(0,num_images,device=device).repeat_interleave(interleave_num).unsqueeze(-1)
+            interleave_num = batch_size // image_height
+            num_height = torch.arange(0,image_height,device=device).repeat_interleave(interleave_num).unsqueeze(-1)
+            interleave_num = batch_size // image_width
+            num_width = torch.arange(0,image_width,device=device).repeat(interleave_num).unsqueeze(-1)
+            indices = torch.cat([num_imgs,num_height,num_width],dim=1).long()
         else:
             indices = torch.floor(
                 torch.rand((batch_size, 3), device=device)
@@ -93,7 +102,7 @@ class PixelSampler:
         image_width = image_width // 8
 
         num_rays_per_batch = image_height * image_width
-        
+
         if "mask" in batch:
             indices = self.sample_method(
                 num_rays_per_batch, num_images, image_height, image_width, mask=batch["mask"], device=device
@@ -106,17 +115,8 @@ class PixelSampler:
             dynamic_indices = self.sample_method(dynamic_num_rays_per_batch, num_images, image_height, image_width, mask=time_mask.unsqueeze(-1),device=device)
             indices = torch.cat([static_indices,dynamic_indices],dim=0)
         else:
-            indices = self.sample_method(num_rays_per_batch, num_images, image_height, image_width, device=device)
+            indices = self.sample_method(num_rays_per_batch, num_images, image_height, image_width, device=device, all_pixels=True)
 
-        print(indices)
-        print(indices.shape)
-        print(num_images)
-        s = set()
-        for idx in range(indices.shape[0]):
-            v = indices[idx].detach().cpu().numpy()
-            s.add((v[0],v[1],v[2]))
-        print(len(s))
-        exit(-1)
         c, y, x = (i.flatten() for i in torch.split(indices, 1, dim=-1))
         c, y, x = c.cpu(), y.cpu(), x.cpu()
         collated_batch = {
