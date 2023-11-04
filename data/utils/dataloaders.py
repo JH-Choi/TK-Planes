@@ -130,6 +130,9 @@ class CacheDataloader(DataLoader):
         while True:
             if self.cache_all_images:
                 collated_batch = self.cached_collated_batch
+                #print("SHAPE SON: {}".format(collated_batch["image"].shape))
+                #print(collated_batch["image_idx"])
+                #exit(-1)
             elif self.first_time or (
                 self.num_times_to_repeat_images != -1 and self.num_repeated >= self.num_times_to_repeat_images
             ):
@@ -138,10 +141,14 @@ class CacheDataloader(DataLoader):
                 collated_batch = self._get_collated_batch()
                 # possibly save a cached item
                 self.cached_collated_batch = collated_batch if self.num_times_to_repeat_images != 0 else None
-                self.first_time = False
+                #self.first_time = False
+                #print("SHAPE SON: {}".format(collated_batch["image"].shape))
+                #print(collated_batch["image_idx"])                                
             else:
                 collated_batch = self.cached_collated_batch
                 self.num_repeated += 1
+                #print("SHAPE SON: {}".format(collated_batch["image"].shape))
+                #print(collated_batch["image_idx"])                
             yield collated_batch
 
 

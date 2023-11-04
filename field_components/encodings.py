@@ -654,7 +654,7 @@ class KPlanesEncoding(Encoding):
         for coo_idx,coo_comb in enumerate(self.coo_combs):
             num_comps = self.num_components
             if 3 in coo_comb:
-                num_comps = num_comps + 1
+                num_comps = num_comps# + 1
             new_plane_coef = nn.Parameter(
                 torch.empty([num_comps] + [self.resolution[cc] for cc in coo_comb[::-1]])
             )

@@ -507,17 +507,17 @@ class KPlanesModel(Model):
         #else:
         #    print("DIFF: {}".format(torch.sum(torch.abs(image - self.prev_image))))
             
-        mask_image = batch["time_mask"].to(image.dtype)
+        #mask_image = batch["time_mask"].to(image.dtype)
 
-        image_mask = torch.sum(mask_image,-1).unsqueeze(-1).to(image.dtype)
+        #image_mask = torch.sum(mask_image,-1).unsqueeze(-1).to(image.dtype)
         #print("SUM: {}".format(torch.sum(image_mask)))
         #exit(-1)
-        image_mask_bool = (image_mask > 10).to(image.dtype)
+        #image_mask_bool = (image_mask > 10).to(image.dtype)
         #non_zero_idxs = torch.nonzero(image_mask_bool)[:,0]
 
         #image_diff = torch.abs(image - outputs["rgb"].detach()).mean(1).unsqueeze(-1)#[non_zero_idxs]
 
-        mask_image = mask_image / 255.
+        #mask_image = mask_image / 255.
         #image = image*(1 - image_mask_bool) + mask_image*image_mask_bool
         #image = (1 - image_mask) + red_image*image_mask
         loss_dict = {"rgb": self.rgb_loss(image.reshape(-1,3), outputs["rgb"])}
@@ -534,13 +534,13 @@ class KPlanesModel(Model):
             outputs_lst = self.vol_tvs
             vol_tvs = 0.0
             time_mask_loss = 0.0
-            time_mask_alt = image_mask_bool.unsqueeze(-1).expand(-1,10,-1)
+            #time_mask_alt = image_mask_bool.unsqueeze(-1).expand(-1,10,-1)
             num_comps = outputs_lst[0][0].shape[-1]
 
-            for output_idx,_outputs in enumerate(outputs_lst):
-                time_mask_loss += self.rgb_loss((_outputs[2][:,num_comps:]).reshape(-1,10,1),time_mask_alt)
-                time_mask_loss += self.rgb_loss((_outputs[4][:,num_comps:]).reshape(-1,10,1),time_mask_alt)
-                time_mask_loss += self.rgb_loss((_outputs[5][:,num_comps:]).reshape(-1,10,1),time_mask_alt)
+            #for output_idx,_outputs in enumerate(outputs_lst):
+            #    time_mask_loss += self.rgb_loss((_outputs[2][:,num_comps:]).reshape(-1,10,1),time_mask_alt)
+            #    time_mask_loss += self.rgb_loss((_outputs[4][:,num_comps:]).reshape(-1,10,1),time_mask_alt)
+            #    time_mask_loss += self.rgb_loss((_outputs[5][:,num_comps:]).reshape(-1,10,1),time_mask_alt)
 
 
             
@@ -574,10 +574,10 @@ class KPlanesModel(Model):
             #loss_dict["camera_delts"] += (torch.abs(self.pos_diff[non_zero_idxs])*image_diff).mean()
             #loss_dict["camera_delts"] = (torch.abs(self.rot_angs*image_diff)).mean()
             #loss_dict["camera_delts"] += (torch.abs(self.pos_diff*image_diff)).mean()
-            loss_dict["local_vol_tvs"] = 0.01*local_vol_tvs / (3*len(outputs_lst))
+            loss_dict["local_vol_tvs"] = 0.001*local_vol_tvs / (3*len(outputs_lst))
             #loss_dict["grid_norm"] = 0.01*grid_norm / (6*len(outputs_lst))
             
-            loss_dict["time_masks"] = time_mask_loss
+            #loss_dict["time_masks"] = time_mask_loss
             
         return loss_dict
 
