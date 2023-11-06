@@ -245,6 +245,7 @@ class KPlanesField(Field):
             grid_encodings=self.grids,
             concat_features=self.concat_across_scales
         )
+
         self.vol_tvs = vol_tvs
         if len(features) < 1:
             features = torch.zeros((0, 1), device=features.device, requires_grad=True)
