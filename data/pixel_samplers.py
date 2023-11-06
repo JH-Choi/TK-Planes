@@ -119,6 +119,8 @@ class PixelSampler:
 
         c, y, x = (i.flatten() for i in torch.split(indices, 1, dim=-1))
         c, y, x = c.cpu(), y.cpu(), x.cpu()
+        print(batch.keys())
+        exit(-1)
         collated_batch = {
             key: value[c, y, x] for key, value in batch.items() if key != "image_idx" and value is not None
         }
@@ -221,6 +223,8 @@ class PixelSampler:
             )
         else:
             raise ValueError("image_batch['image'] must be a list or torch.Tensor")
+        print(pixel_batch.keys())
+        exit(-1)
         return pixel_batch
 
 

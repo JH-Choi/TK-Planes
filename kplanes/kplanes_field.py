@@ -71,8 +71,8 @@ def interpolate_ms_features(
         else:
             multi_scale_interp = multi_scale_interp + grid_features
 
-    if concat_features:
-        multi_scale_interp = torch.cat(multi_scale_interp, dim=-1)
+    #if concat_features:
+    #    multi_scale_interp = torch.cat(multi_scale_interp, dim=-1)
 
     return multi_scale_interp, vol_tvs
 
