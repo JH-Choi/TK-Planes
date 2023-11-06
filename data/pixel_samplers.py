@@ -96,40 +96,52 @@ class PixelSampler:
         """
 
         device = batch["image"].device
-        num_images, image_height, image_width, _ = batch["image"].shape
+        #num_images, image_height, image_width, _ = batch["image"].shape
 
-        image_height = image_height // 8
-        image_width = image_width // 8
+        indices_lst = []
+        divider = 8
+        for idx in range(3):
+            num_images, image_height, image_width, _ = batch["image"].shape            
+            image_height = image_height // divider
+            image_width = image_width // divider
 
-        num_rays_per_batch = image_height * image_width
+            num_rays_per_batch = image_height * image_width
 
-        if "mask" in batch:
-            indices = self.sample_method(
-                num_rays_per_batch, num_images, image_height, image_width, mask=batch["mask"], device=device
-            )
-        elif "time_mask" in batch and False:
-            dynamic_num_rays_per_batch = 1024
-            static_num_rays_per_batch = num_rays_per_batch - dynamic_num_rays_per_batch
-            time_mask = torch.sum(batch["time_mask"],-1) > 10
-            static_indices = self.sample_method(static_num_rays_per_batch, num_images, image_height, image_width, mask=~time_mask.unsqueeze(-1),device=device)
-            dynamic_indices = self.sample_method(dynamic_num_rays_per_batch, num_images, image_height, image_width, mask=time_mask.unsqueeze(-1),device=device)
-            indices = torch.cat([static_indices,dynamic_indices],dim=0)
-        else:
-            indices = self.sample_method(num_rays_per_batch, num_images, image_height, image_width, device=device, all_pixels=True)
+            if "mask" in batch:
+                indices = self.sample_method(
+                    num_rays_per_batch, num_images, image_height, image_width, mask=batch["mask"], device=device
+                )
+            elif "time_mask" in batch and False:
+                dynamic_num_rays_per_batch = 1024
+                static_num_rays_per_batch = num_rays_per_batch - dynamic_num_rays_per_batch
+                time_mask = torch.sum(batch["time_mask"],-1) > 10
+                static_indices = self.sample_method(static_num_rays_per_batch, num_images, image_height, image_width, mask=~time_mask.unsqueeze(-1),device=device)
+                dynamic_indices = self.sample_method(dynamic_num_rays_per_batch, num_images, image_height, image_width, mask=time_mask.unsqueeze(-1),device=device)
+                indices = torch.cat([static_indices,dynamic_indices],dim=0)
+            else:
+                indices = self.sample_method(num_rays_per_batch, num_images, image_height, image_width, device=device, all_pixels=True)
 
-        c, y, x = (i.flatten() for i in torch.split(indices, 1, dim=-1))
-        c, y, x = c.cpu(), y.cpu(), x.cpu()
-        print(batch.keys())
-        exit(-1)
-        collated_batch = {
-            key: value[c, y, x] for key, value in batch.items() if key != "image_idx" and value is not None
-        }
+            #c, y, x = (i.flatten() for i in torch.split(indices, 1, dim=-1))
+            #c, y, x = c.cpu(), y.cpu(), x.cpu()
+            #print(batch.keys())
+            #print(indices.shape)
+            #print(batch["image_idx"].shape)
+            #print(batch["image_idx"][c])
+            #exit(-1)
+            indices_lst.append(indices)
+            divider *= 2
+        #collated_batch = {
+        #    key: value[c, y, x] for key, value in batch.items() if key != "image_idx" and key != "image" and value is not None
+        #}
 
-        assert collated_batch["image"].shape[0] == num_rays_per_batch
-        
+        collated_batch = {}
+        #assert collated_batch["image"].shape[0] == num_rays_per_batch
+        assert batch["image_idx"].shape[0] == 1
         # Needed to correct the random indices to their actual camera idx locations.
-        indices[:, 0] = batch["image_idx"][c]
-        collated_batch["indices"] = indices  # with the abs camera indices
+        for indices in indices_lst:
+            indices[:, 0] = batch["image_idx"][0]
+        
+        collated_batch["indices_lst"] = indices_lst  # with the abs camera indices
 
         if keep_full_image:
             collated_batch["full_image"] = batch["image"]
