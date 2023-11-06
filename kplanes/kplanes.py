@@ -587,12 +587,12 @@ class KPlanesModel(Model):
         image = batch["image"].to(self.device)
 
         rgb = outputs["rgb"]
-        acc = colormaps.apply_colormap(outputs["accumulation"])
-        depth = colormaps.apply_depth_colormap(outputs["depth"], accumulation=outputs["accumulation"])
+        #acc = colormaps.apply_colormap(outputs["accumulation"])
+        #depth = colormaps.apply_depth_colormap(outputs["depth"], accumulation=outputs["accumulation"])
 
         combined_rgb = torch.cat([image, rgb], dim=1)
-        combined_acc = torch.cat([acc], dim=1)
-        combined_depth = torch.cat([depth], dim=1)
+        #combined_acc = torch.cat([acc], dim=1)
+        #combined_depth = torch.cat([depth], dim=1)
 
         # Switch images from [H, W, C] to [1, C, H, W] for metrics computations
         image = torch.moveaxis(image, -1, 0)[None, ...]
@@ -604,15 +604,15 @@ class KPlanesModel(Model):
             "ssim": float(self.ssim(image, rgb)),
             "lpips": float(self.lpips(image, rgb))
         }
-        images_dict = {"img": combined_rgb, "accumulation": combined_acc, "depth": combined_depth}
+        images_dict = {"img": combined_rgb} #, "accumulation": combined_acc, "depth": combined_depth}
 
-        for i in range(self.config.num_proposal_iterations):
-            key = f"prop_depth_{i}"
-            prop_depth_i = colormaps.apply_depth_colormap(
-                outputs[key],
-                accumulation=outputs["accumulation"],
-            )
-            images_dict[key] = prop_depth_i
+        #for i in range(self.config.num_proposal_iterations):
+        #    key = f"prop_depth_{i}"
+        #    prop_depth_i = colormaps.apply_depth_colormap(
+        #        outputs[key],
+        #        accumulation=outputs["accumulation"],
+        #    )
+        #    images_dict[key] = prop_depth_i
 
         return metrics_dict, images_dict
 

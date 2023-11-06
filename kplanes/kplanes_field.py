@@ -180,8 +180,8 @@ class KPlanesField(Field):
                     "otype": "CutlassMLP", #"FullyFusedMLP",
                     "activation": "ReLU",
                     "output_activation": "None",
-                    "n_neurons": 2048, #64
-                    "n_hidden_layers": 1, #1
+                    "n_neurons": 4096, #64
+                    "n_hidden_layers": 2, #1
                 },
             )
             self.direction_encoding = tcnn.Encoding(
@@ -202,8 +202,8 @@ class KPlanesField(Field):
                     "otype": "CutlassMLP", #"FullyFusedMLP",
                     "activation": "ReLU",
                     "output_activation": "None", #"Sigmoid",
-                    "n_neurons": 1024, #64
-                    "n_hidden_layers": 2, #2
+                    "n_neurons": 2048, #64
+                    "n_hidden_layers": 3, #2
                 },
             )
 
