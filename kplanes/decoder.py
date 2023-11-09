@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
+import cv2
 
 def conv3x3(in_channels, out_channels, stride=1,
             padding=1, bias=False, groups=1):
@@ -104,9 +105,9 @@ class UpConv(nn.Module):
                 #nn.InstanceNorm2d(self.out_channels // 2),
                 nn.LeakyReLU(0.02),
                 #nn.InstanceNorm2d(self.out_channels // 2),
-                conv3x3(self.out_channels // 2, self.out_channels // 4),
-                nn.LeakyReLU(0.02),
-                conv1x1(self.out_channels // 4, 3),
+                #conv3x3(self.out_channels // 2, self.out_channels // 4),
+                #nn.LeakyReLU(0.02),
+                conv1x1(self.out_channels // 2, 3),
                 #nn.InstanceNorm2d(3),
                 #nn.Tanh())
                 nn.Sigmoid())
@@ -134,13 +135,15 @@ class UpConv(nn.Module):
         return x
             
 class ImageDecoder(nn.Module):
-    def __init__(self, input_dim=(45,80), final_dim=(360,640), feature_dim=256, mode='transpose'):
+    def __init__(self, input_dim=(45,80), final_dim=(360,640), feature_dim=512, mode='transpose'):
         super().__init__()
         self.layers = []
         self.input_dim = input_dim
         self.final_dim = final_dim
         self.feature_dim = feature_dim
-
+        self.save_images = False
+        self.save_counter = 0
+        
         #self.norm0 = nn.InstanceNorm2d(feature_dim)
         
         while (input_dim[0] != final_dim[0]):
@@ -154,9 +157,16 @@ class ImageDecoder(nn.Module):
     def forward(self,x):
 
         #x = self.norm0(x)
-        
         for l in self.layers:
             x = l(x)
 
+        if self.save_images:
+            reconst_image_np = x.permute(0,2,3,1)
+            reconst_image_np = reconst_image_np.squeeze().detach().cpu().numpy()
+            reconst_image_np = (reconst_image_np*255).astype(np.uint8)
+            reconst_image_np = reconst_image_np[:,:,[2,1,0]]
+            cv2.imwrite("test_images/frame_{}.png".format("%05d"%self.save_counter),reconst_image_np)
+            self.save_counter += 1
+            
         return x
     

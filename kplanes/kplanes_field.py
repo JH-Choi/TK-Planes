@@ -175,13 +175,13 @@ class KPlanesField(Field):
         else:
             self.sigma_net = tcnn.Network(
                 n_input_dims=self.feature_dim,
-                n_output_dims=self.geo_feat_dim + 256, #+ 1,
+                n_output_dims=self.geo_feat_dim + 512, #+ 1,
                 network_config={
                     "otype": "CutlassMLP", #"FullyFusedMLP",
                     "activation": "ReLU",
                     "output_activation": "None",
                     "n_neurons": 4096, #64
-                    "n_hidden_layers": 2, #1
+                    "n_hidden_layers": 1, #1
                 },
             )
             self.direction_encoding = tcnn.Encoding(
@@ -197,13 +197,13 @@ class KPlanesField(Field):
             
             self.color_net = tcnn.Network(
                 n_input_dims=in_dim_color,
-                n_output_dims=256, #3,
+                n_output_dims=512, #3,
                 network_config={
                     "otype": "CutlassMLP", #"FullyFusedMLP",
                     "activation": "ReLU",
                     "output_activation": "None", #"Sigmoid",
                     "n_neurons": 2048, #64
-                    "n_hidden_layers": 3, #2
+                    "n_hidden_layers": 2, #2
                 },
             )
 
@@ -253,7 +253,7 @@ class KPlanesField(Field):
             density_before_activation = self.sigma_net(features).view(*ray_samples.frustums.shape, -1)
         else:
             features = self.sigma_net(features).view(*ray_samples.frustums.shape, -1)
-            features, density_before_activation = torch.split(features, [self.geo_feat_dim, 256], dim=-1) #1], dim=-1)
+            features, density_before_activation = torch.split(features, [self.geo_feat_dim, 512], dim=-1) #1], dim=-1)
 
         # Rectifying the density with an exponential is much more stable than a ReLU or
         # softplus, because it enables high post-activation (float32) density outputs

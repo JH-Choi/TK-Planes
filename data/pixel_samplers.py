@@ -98,8 +98,8 @@ class PixelSampler:
         device = batch["image"].device
         num_images, image_height, image_width, _ = batch["image"].shape
 
-        image_height = image_height // 8
-        image_width = image_width // 8
+        image_height = image_height // 16
+        image_width = image_width // 16
 
         num_rays_per_batch = image_height * image_width
 
