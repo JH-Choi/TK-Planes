@@ -54,6 +54,7 @@ from nerfstudio.data.datasets.base_dataset import InputDataset
 from nerfstudio.data.pixel_samplers import (
     EquirectangularPixelSampler,
     PatchPixelSampler,
+    TieredFeaturePatchPixelSampler,
     PixelSampler,
 )
 from nerfstudio.data.utils.dataloaders import (
@@ -435,6 +436,13 @@ class VanillaDataManager(DataManager, Generic[TDataset]):
 
     def _get_pixel_sampler(self, dataset: TDataset, *args: Any, **kwargs: Any) -> PixelSampler:
         """Infer pixel sampler to use."""
+
+        return TieredFeaturePatchPixelSampler(*args, **kwargs, patch_size=self.config.patch_size,
+                                              num_tiers=3,
+                                              keep_full_image = True,
+                                              feature_patch_size=128,
+                                              num_images=153)
+        
         if self.config.patch_size > 1:
             return PatchPixelSampler(*args, **kwargs, patch_size=self.config.patch_size)
 
@@ -454,7 +462,7 @@ class VanillaDataManager(DataManager, Generic[TDataset]):
         CONSOLE.print("Setting up training dataset...")
         self.train_image_dataloader = CacheDataloader(
             self.train_dataset,
-            num_images_to_sample_from= 1, 
+            num_images_to_sample_from= 153, 
             #num_images_to_sample_from=self.config.train_num_images_to_sample_from,            
             num_times_to_repeat_images=self.config.train_num_times_to_repeat_images,
             device=self.device,
@@ -508,7 +516,7 @@ class VanillaDataManager(DataManager, Generic[TDataset]):
             num_workers=self.world_size * 4,
         )
 
-    def next_train(self, step: int) -> Tuple[RayBundle, Dict]:
+    def next_train(self, step: int): # -> Tuple[RayBundle, Dict]:
         """Returns the next batch of data from the train dataloader."""
         self.train_count += 1
         image_batch = next(self.iter_train_image_dataloader)
@@ -516,14 +524,21 @@ class VanillaDataManager(DataManager, Generic[TDataset]):
         assert isinstance(image_batch, dict)
         batch = self.train_pixel_sampler.sample(image_batch)
         ray_indices = batch["indices"]
+        ray_bundles = []
+        #ray_mult = 2
+        ray_mult = 1
+        for ray_index in ray_indices:
+            ray_bundle = self.train_ray_generator(ray_index,ray_mult)
+            ray_bundles.append(ray_bundle)
+            #ray_mult *= 2
 
-        ray_bundle = self.train_ray_generator(ray_indices)
+        #ray_bundle = self.train_ray_generator(ray_indices)
         #print(ray_bundle.metadata["directions_norm"].shape)
         #print(batch["time_mask"].unsqueeze(-1).shape)
 
-        ray_bundle.metadata["time_mask"] = batch["time_mask"]
+        #ray_bundle.metadata["time_mask"] = batch["time_mask"]
 
-        return ray_bundle, batch
+        return ray_bundles, batch
 
     def next_eval(self, step: int) -> Tuple[RayBundle, Dict]:
         """Returns the next batch of data from the eval dataloader."""

@@ -177,20 +177,47 @@ class KPlanesModel(Model):
             scene_contraction = None
 
         # Fields
-        self.field = KPlanesField(
-            self.scene_box.aabb,
-            num_images=self.num_train_data,
-            grid_base_resolution=self.config.grid_base_resolution,
-            grid_feature_dim=self.config.grid_feature_dim,
-            concat_across_scales=self.config.concat_features_across_scales,
-            multiscale_res=self.config.multiscale_res,
-            spatial_distortion=scene_contraction,
-            appearance_embedding_dim=self.config.appearance_embedding_dim,
-            use_average_appearance_embedding=self.config.use_average_appearance_embedding,
-            linear_decoder=self.config.linear_decoder,
-            linear_decoder_layers=self.config.linear_decoder_layers,
-        )
+        scale = 4
+        feat_dim = self.config.grid_feature_dim // 4
+        self.start_feat_dim = feat_dim
+        curr_res = [res * 4 if idx < 3 else res for idx,res in enumerate(self.config.grid_base_resolution)]
 
+        self.fields = []
+        for scale in [4,2,1]:
+            field = KPlanesField(
+                self.scene_box.aabb * scale,
+                num_images=self.num_train_data,
+                grid_base_resolution=curr_res,
+                grid_feature_dim=feat_dim,
+                concat_across_scales=self.config.concat_features_across_scales,
+                multiscale_res=[scale],
+                spatial_distortion=scene_contraction,
+                appearance_embedding_dim=self.config.appearance_embedding_dim,
+                use_average_appearance_embedding=self.config.use_average_appearance_embedding,
+                linear_decoder=self.config.linear_decoder,
+                linear_decoder_layers=self.config.linear_decoder_layers,
+            )
+            self.fields.append(field)
+            scale = scale // 2
+            feat_dim = feat_dim * 2
+            curr_res = [res // 2 if idx < 3 else res for idx,res in enumerate(curr_res)]
+
+        self.fields = torch.nn.ModuleList(self.fields)
+
+        #self.field = KPlanesField(
+        #    self.scene_box.aabb,
+        #    num_images=self.num_train_data,
+        #    grid_base_resolution=self.config.grid_base_resolution,
+        #    grid_feature_dim=self.config.grid_feature_dim,
+        #    concat_across_scales=self.config.concat_features_across_scales,
+        #    multiscale_res=self.config.multiscale_res,
+        #    spatial_distortion=scene_contraction,
+        #    appearance_embedding_dim=self.config.appearance_embedding_dim,
+        #    use_average_appearance_embedding=self.config.use_average_appearance_embedding,
+        #    linear_decoder=self.config.linear_decoder,
+        #    linear_decoder_layers=self.config.linear_decoder_layers,
+        #)
+        
         self.img_save_counter = 0
         self.vol_tvs = None
         self.cosine_idx = 0
@@ -206,7 +233,10 @@ class KPlanesModel(Model):
         self.pos_idx = 0
         self.camera_pose_delts = torch.nn.ParameterList([rot_angs,pos_diff])
 
-        self.decoder = ImageDecoder()
+        self.final_dim = 32
+        self.decoder = ImageDecoder(input_dim=(self.final_dim // 8,self.final_dim // 8),
+                                    final_dim=(self.final_dim,self.final_dim),
+                                    feature_dim=self.config.grid_feature_dim // 2,mode='upsample')
         
         self.density_fns = []
         num_prop_nets = self.config.num_proposal_iterations
@@ -263,7 +293,12 @@ class KPlanesModel(Model):
 
         # Collider
         self.collider = NearFarCollider(near_plane=self.config.near_plane, far_plane=self.config.far_plane)
-
+        self.colliders = []
+        for i in [4,2,1]:
+            collider = NearFarCollider(near_plane=self.config.near_plane / i, far_plane=self.config.far_plane*i)
+            self.colliders.append(collider)
+        self.colliders = torch.nn.ModuleList(self.colliders)
+        
         # renderers
         self.renderer_rgb = FeatureRenderer(background_color=self.config.background_color)
         #self.renderer_accumulation = AccumulationRenderer()
@@ -285,7 +320,7 @@ class KPlanesModel(Model):
     def get_param_groups(self) -> Dict[str, List[Parameter]]:
         param_groups = {
             #"proposal_networks": list(self.proposal_networks.parameters()),
-            "fields": list(self.field.parameters()),
+            "fields": list(self.fields.parameters()),
             "decoder": list(self.decoder.parameters()),
             #"pose_delts": self.camera_pose_delts,
         }
@@ -362,78 +397,69 @@ class KPlanesModel(Model):
 
         return R
     
-    def get_outputs(self, ray_bundle: RayBundle):
+    def get_outputs(self, ray_bundles): #: RayBundle):
         density_fns = self.density_fns
-        if ray_bundle.times is not None:
-            density_fns = [functools.partial(f, times=ray_bundle.times) for f in density_fns]
-
-        orig_shape = None
-        #print("BUNDLE: {}".format(ray_bundle.shape))        
-        if len(ray_bundle.shape) > 1:
-            orig_shape = ray_bundle.shape
-            ray_bundle = ray_bundle.reshape(orig_shape[0]*orig_shape[1])
-            #print("NEW BUNDLE: {}".format(ray_bundle.shape))
-
-        '''
-        rot_angs = self.camera_pose_delts[0]
-        pos_diff = self.camera_pose_delts[1]
-        
-        R = self.get_rot_mat_torch(torch.clip(rot_angs,-0.01,0.01))
-        selected_R = R[ray_bundle.camera_indices.squeeze()]
-        new_dirs = torch.matmul(selected_R,ray_bundle.directions.unsqueeze(-1)).squeeze()
-        selected_delts = pos_diff[ray_bundle.camera_indices.squeeze()]
-        new_origins = ray_bundle.origins + torch.clip(selected_delts,-0.25,0.25)
-        ray_bundle.origins = new_origins
-        ray_bundle.directions = new_dirs #/ torch.norm(new_dirs,2,1).unsqueeze(-1)
-        self.rot_angs = rot_angs[:,ray_bundle.camera_indices.squeeze()].transpose(-1,-2)
-        self.pos_diff = pos_diff[ray_bundle.camera_indices.squeeze(),:]
-        
-
-        self.pos_idx = (self.pos_idx + 1) % 1000
-        if self.pos_idx == 0:
-            print(rot_angs)
-            print(pos_diff)
-        '''
+        #if ray_bundle.times is not None:
+        #    density_fns = [functools.partial(f, times=ray_bundle.times) for f in density_fns]
+        #print(ray_bundles[0].directions.shape)
+        #size = ray_bundles[0].directions.shape[0] / 100
+        #sq_size = np.sqrt(size)
+        #new_origins = ray_bundles[0].directions.reshape(100,int(sq_size),int(sq_size),-1)
+        #print(size,sq_size)
+        #print(new_origins.shape)
+        #exit(-1)
         weights_list = []
         ray_samples_list = []
-        #ray_samples, weights_list, ray_samples_list = self.proposal_sampler(
-        ray_samples = self.proposal_sampler(            
-            ray_bundle, 10 #, density_fns=density_fns
-        )
-        field_outputs = self.field(ray_samples)
-        
-        #weights = ray_samples.get_weights(field_outputs[FieldHeadNames.DENSITY])
-        weights = field_outputs[FieldHeadNames.DENSITY]
-        weights_list.append(weights)
-        ray_samples_list.append(ray_samples)
+        self.vol_tvs = []
+        num_samps = self.config.num_samples*4 # 2**2 for three stages
+        feat_dim = self.start_feat_dim // 2
+        curr_dim = self.final_dim // 2
+        rgb_images = []
 
-        rgb = self.renderer_rgb(rgb=field_outputs[FieldHeadNames.RGB], weights=weights)
-        #depth = self.renderer_depth(weights=weights, ray_samples=ray_samples)
-        #accumulation = self.renderer_accumulation(weights=weights)
+        for rbidx,ray_bundle in enumerate(ray_bundles):
+            orig_shape = None
+            if len(ray_bundle.shape) > 1:
+                orig_shape = ray_bundle.shape
+                ray_bundle = ray_bundle.reshape(orig_shape[0]*orig_shape[1])
+                #print("NEW BUNDLE: {}".format(ray_bundle.shape))
 
-        self.vol_tvs = field_outputs["vol_tvs"]
-        if orig_shape is None:
-            rgb_image = rgb.reshape((45,80,256)) #.transpose(2,0,1)
-        else:
-            rgb_image = rgb.reshape(orig_shape + (256,))
+            ray_samples = self.proposal_sampler(            
+                ray_bundle, num_samps #, density_fns=density_fns
+            )
+            field_outputs = self.fields[rbidx](ray_samples)
+
+            #weights = ray_samples.get_weights(field_outputs[FieldHeadNames.DENSITY])
+            weights = field_outputs[FieldHeadNames.DENSITY]
+            weights_list.append(weights)
+            ray_samples_list.append(ray_samples)
+
+            rgb = self.renderer_rgb(rgb=field_outputs[FieldHeadNames.RGB], weights=weights)
+
+            #depth = self.renderer_depth(weights=weights, ray_samples=ray_samples)
+            #accumulation = self.renderer_accumulation(weights=weights)
+
+            self.vol_tvs.append(field_outputs["vol_tvs"][0])
+            if orig_shape is None:
+                rgb_image = rgb.reshape((-1,curr_dim,curr_dim,feat_dim)) #.transpose(2,0,1)
+            else:
+                rgb_image = rgb.reshape(orig_shape + (feat_dim,))
+
+            rgb_image = rgb_image.permute(0,3,1,2)
+            rgb_images.append(rgb_image)
+            curr_dim = curr_dim // 2
+            feat_dim = feat_dim * 2
+            num_samps = num_samps // 2
             
-        rgb_image = rgb_image.permute(2,0,1)
-        reconst_image = self.decoder(rgb_image.unsqueeze(0)).permute(0,2,3,1)
-
+        reconst_image = self.decoder(rgb_images).permute(0,2,3,1) #.unsqueeze(0)).permute(0,2,3,1)
+        
         self.img_save_counter = (self.img_save_counter + 1) % 50
         if self.img_save_counter == 0:
-            #with torch.no_grad():
-            #    zero_reconst_image = self.decoder(torch.zeros_like(rgb_image).unsqueeze(0)).permute(0,2,3,1)
-            reconst_image_np = reconst_image.squeeze().detach().cpu().numpy()
-            reconst_image_np = (reconst_image_np*255).astype(np.uint8)
-            reconst_image_np = reconst_image_np[:,:,[2,1,0]]
-            #zero_reconst_image_np = zero_reconst_image.squeeze().detach().cpu().numpy()
-            #zero_reconst_image_np = (zero_reconst_image_np*255).astype(np.uint8)
-            #zero_reconst_image_np = zero_reconst_image_np[:,:,[2,1,0]]
-            #print("SIZE: {}".format(reconst_image_np.shape))
-            #print("MEAN: {}".format(reconst_image_np.mean()))            
-            cv2.imwrite("test_feature_img.png",reconst_image_np)
-            #cv2.imwrite("test_feature_img_zero.png",zero_reconst_image_np)        
+            self.reconst_image_np = reconst_image.detach().cpu().reshape(-1,reconst_image.shape[2],reconst_image.shape[3]).numpy()
+            #for npidx in range(reconst_image.shape[0]):
+            #    curr_reconst_image_np = (reconst_image_np[npidx]*255).astype(np.uint8)
+            #    curr_reconst_image_np = curr_reconst_image_np[:,:,[2,1,0]]
+            #    cv2.imwrite("test_feature_img{}.png".format(npidx),curr_reconst_image_np)
+
 
         outputs = {
             "rgb": reconst_image.reshape(-1,3), #rgb,
@@ -465,7 +491,11 @@ class KPlanesModel(Model):
             #metrics_dict["distortion"] = distortion_loss(outputs["weights_list"], outputs["ray_samples_list"])
 
             #prop_grids = [p.grids.plane_coefs for p in self.proposal_networks]
-            field_grids = [g.plane_coefs for g in self.field.grids]
+            #field_grids = [g.plane_coefs for g in self.field.grids]
+            field_grids = []
+            for field in self.fields:
+                for g in field.grids:
+                    field_grids.append(g.plane_coefs)
 
             metrics_dict["plane_tv"] = space_tv_loss(field_grids)
             #metrics_dict["plane_tv_proposal_net"] = space_tv_loss(prop_grids)
@@ -502,6 +532,16 @@ class KPlanesModel(Model):
     def get_loss_dict(self, outputs, batch, metrics_dict=None):
         image = batch["full_image"].to(self.device)
 
+        if self.img_save_counter == 0:
+            actual_image_np = image.detach().cpu().reshape(-1,image.shape[2],image.shape[3]).numpy()
+            combo_image_np = np.concatenate([actual_image_np,self.reconst_image_np],axis=1)
+            combo_image_np = (combo_image_np * 255).astype(np.uint8)
+            combo_image_np = combo_image_np[:,:,[2,1,0]]
+            #for idx in range(image.shape[0]):
+            #    curr_reconst_image_np = (reconst_image_np[idx]*255).astype(np.uint8)
+            #    curr_reconst_image_np = curr_reconst_image_np[:,:,[2,1,0]]
+            cv2.imwrite("test_feature_img.png",combo_image_np)
+        
         #if self.prev_image is None:
         #    self.prev_image = image
         #else:
@@ -574,7 +614,7 @@ class KPlanesModel(Model):
             #loss_dict["camera_delts"] += (torch.abs(self.pos_diff[non_zero_idxs])*image_diff).mean()
             #loss_dict["camera_delts"] = (torch.abs(self.rot_angs*image_diff)).mean()
             #loss_dict["camera_delts"] += (torch.abs(self.pos_diff*image_diff)).mean()
-            loss_dict["local_vol_tvs"] = 0.001*local_vol_tvs / (3*len(outputs_lst))
+            loss_dict["local_vol_tvs"] = 1.0*local_vol_tvs / (3*len(outputs_lst))
             #loss_dict["grid_norm"] = 0.01*grid_norm / (6*len(outputs_lst))
             
             #loss_dict["time_masks"] = time_mask_loss

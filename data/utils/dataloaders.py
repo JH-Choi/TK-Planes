@@ -99,7 +99,8 @@ class CacheDataloader(DataLoader):
         """Returns a list of batches from the dataset attribute."""
 
         assert isinstance(self.dataset, Sized)
-        indices = random.sample(range(len(self.dataset)), k=self.num_images_to_sample_from)
+        #indices = random.sample(range(len(self.dataset)), k=self.num_images_to_sample_from)
+        indices = [i for i in range(self.num_images_to_sample_from)]
         batch_list = []
         results = []
 
@@ -124,6 +125,8 @@ class CacheDataloader(DataLoader):
         collated_batch = get_dict_to_torch(
             collated_batch, device=self.device, exclude=self.exclude_batch_keys_from_device
         )
+        #print(collated_batch)
+
         return collated_batch
 
     def __iter__(self):

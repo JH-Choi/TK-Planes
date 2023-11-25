@@ -17,6 +17,7 @@ Code for sampling pixels.
 """
 
 import random
+import math
 from typing import Dict, Optional, Union
 
 import torch
@@ -70,8 +71,9 @@ class PixelSampler:
         elif all_pixels:
             interleave_num = batch_size // num_images
             num_imgs = torch.arange(0,num_images,device=device).repeat_interleave(interleave_num).unsqueeze(-1)
-            interleave_num = batch_size // image_height
-            num_height = torch.arange(0,image_height,device=device).repeat_interleave(interleave_num).unsqueeze(-1)
+            interleave_num = batch_size // (image_height * num_images)
+            num_height = torch.arange(0,image_height,device=device).repeat_interleave(interleave_num) #.unsqueeze(-1)
+            num_height = num_height.repeat(num_images).unsqueeze(-1)
             interleave_num = batch_size // image_width
             num_width = torch.arange(0,image_width,device=device).repeat(interleave_num).unsqueeze(-1)
             indices = torch.cat([num_imgs,num_height,num_width],dim=1).long()
@@ -99,52 +101,52 @@ class PixelSampler:
         #num_images, image_height, image_width, _ = batch["image"].shape
 
         indices_lst = []
-        divider = 8
-        for idx in range(3):
-            num_images, image_height, image_width, _ = batch["image"].shape            
-            image_height = image_height // divider
-            image_width = image_width // divider
+        #divider = 8
 
-            num_rays_per_batch = image_height * image_width
+        num_images, image_height, image_width, _ = batch["image"].shape            
+        #image_height = image_height // divider
+        #image_width = image_width // divider
 
-            if "mask" in batch:
-                indices = self.sample_method(
-                    num_rays_per_batch, num_images, image_height, image_width, mask=batch["mask"], device=device
-                )
-            elif "time_mask" in batch and False:
-                dynamic_num_rays_per_batch = 1024
-                static_num_rays_per_batch = num_rays_per_batch - dynamic_num_rays_per_batch
-                time_mask = torch.sum(batch["time_mask"],-1) > 10
-                static_indices = self.sample_method(static_num_rays_per_batch, num_images, image_height, image_width, mask=~time_mask.unsqueeze(-1),device=device)
-                dynamic_indices = self.sample_method(dynamic_num_rays_per_batch, num_images, image_height, image_width, mask=time_mask.unsqueeze(-1),device=device)
-                indices = torch.cat([static_indices,dynamic_indices],dim=0)
-            else:
-                indices = self.sample_method(num_rays_per_batch, num_images, image_height, image_width, device=device, all_pixels=True)
+        num_rays_per_batch = image_height * image_width
 
-            #c, y, x = (i.flatten() for i in torch.split(indices, 1, dim=-1))
-            #c, y, x = c.cpu(), y.cpu(), x.cpu()
-            #print(batch.keys())
-            #print(indices.shape)
-            #print(batch["image_idx"].shape)
-            #print(batch["image_idx"][c])
-            #exit(-1)
-            indices_lst.append(indices)
-            divider *= 2
+        if "mask" in batch:
+            indices = self.sample_method(
+                num_rays_per_batch, num_images, image_height, image_width, mask=batch["mask"], device=device
+            )
+        elif "time_mask" in batch and False:
+            dynamic_num_rays_per_batch = 1024
+            static_num_rays_per_batch = num_rays_per_batch - dynamic_num_rays_per_batch
+            time_mask = torch.sum(batch["time_mask"],-1) > 10
+            static_indices = self.sample_method(static_num_rays_per_batch, num_images, image_height, image_width, mask=~time_mask.unsqueeze(-1),device=device)
+            dynamic_indices = self.sample_method(dynamic_num_rays_per_batch, num_images, image_height, image_width, mask=time_mask.unsqueeze(-1),device=device)
+            indices = torch.cat([static_indices,dynamic_indices],dim=0)
+        else:
+            indices,dw,dh,select,xy_dim = self.sample_method(num_rays_per_batch, num_images, image_height, image_width, device=device, all_pixels=True)
+
+        #c, y, x = (i.flatten() for i in torch.split(indices, 1, dim=-1))
+        #c, y, x = c.cpu(), y.cpu(), x.cpu()
+        #print(batch.keys())
+        #print(indices.shape)
+        #print(batch["image_idx"].shape)
+        #print(batch["image_idx"][c])
+        #exit(-1)
+        #indices_lst.append(indices)
+        #divider *= 2
         #collated_batch = {
         #    key: value[c, y, x] for key, value in batch.items() if key != "image_idx" and key != "image" and value is not None
         #}
 
         collated_batch = {}
         #assert collated_batch["image"].shape[0] == num_rays_per_batch
-        assert batch["image_idx"].shape[0] == 1
+        #assert batch["image_idx"].shape[0] == 1
         # Needed to correct the random indices to their actual camera idx locations.
-        for indices in indices_lst:
-            indices[:, 0] = batch["image_idx"][0]
+
+        #indices[:, 0] = batch["image_idx"][c]
         
-        collated_batch["indices_lst"] = indices_lst  # with the abs camera indices
+        collated_batch["indices"] = indices  # with the abs camera indices
 
         if keep_full_image:
-            collated_batch["full_image"] = batch["image"]
+            collated_batch["full_image"] = batch["image"][select,dh:dh+xy_dim,dw:dw+xy_dim]
 
         return collated_batch
 
@@ -235,8 +237,7 @@ class PixelSampler:
             )
         else:
             raise ValueError("image_batch['image'] must be a list or torch.Tensor")
-        print(pixel_batch.keys())
-        exit(-1)
+
         return pixel_batch
 
 
@@ -358,8 +359,27 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
         self.patch_size = kwargs["patch_size"]
         self.num_tiers = kwargs["num_tiers"]
         self.feature_patch_size = kwargs["feature_patch_size"]
-        self.num_imgs = kwargs["num_imgs"]
+
+        self.select_idxs = [i for i in range(153)]
+        random.shuffle(self.select_idxs)
+        #self.num_imgs = kwargs["num_imgs"]
         num_rays = (num_rays_per_batch // (self.patch_size**2)) * (self.patch_size**2)
+        self.keep_full_image = keep_full_image
+        self.indices = []
+        self.num_to_select = 100
+        num_images = 153
+        curr_dim = 32 // 2
+        self.init_dim = curr_dim
+        for idx in range(3):
+            batch_size = (curr_dim**2)*num_images
+            curr_indices = super().sample_method(batch_size, num_images, curr_dim, curr_dim, mask=None, device="cuda:0",all_pixels=True)
+            self.indices.append(curr_indices)
+            curr_dim = curr_dim // 2
+        #select = torch.randn(153) > 1.5
+        #select = select.repeat_interleave(curr_dim**2)
+        #print(indices1.shape)
+        #print(indices1[select].shape)
+
         super().__init__(num_rays, keep_full_image, **kwargs)
 
     def set_num_rays_per_batch(self, num_rays_per_batch: int):
@@ -387,21 +407,30 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
             print('MASK NOT HANDLED FOR TIERED FEATURE SAMPLER, EXITTING')
             exit(-1)
         else:
-            sub_bs = batch_size // (self.patch_size**2)
-            indices = torch.rand((sub_bs, 3), device=device) * torch.tensor(
-                [num_images, image_height - self.patch_size, image_width - self.patch_size],
-                device=device,
-            )
+            #select = torch.randn(153) > 1.5
 
-            indices = indices.view(sub_bs, 1, 1, 3).broadcast_to(sub_bs, self.patch_size, self.patch_size, 3).clone()
+            if len(self.select_idxs) < self.num_to_select:
+                self.select_idxs = [i for i in range(153)]
+                random.shuffle(self.select_idxs)
 
-            yys, xxs = torch.meshgrid(
-                torch.arange(self.patch_size, device=device), torch.arange(self.patch_size, device=device)
-            )
-            indices[:, ..., 1] += yys
-            indices[:, ..., 2] += xxs
+            curr_select_idxs = self.select_idxs[:self.num_to_select]
+            self.select_idxs = self.select_idxs[self.num_to_select:]
+            select = torch.zeros(153).to(bool)
+            select[curr_select_idxs] = True
+            curr_dim = self.init_dim * 2
+            indices = []
+            dw = random.randint(0,image_width - curr_dim - 1)
+            dh = random.randint(0,image_height - curr_dim - 1)
+            dw_og = dw
+            dh_og = dh
+            for index in self.indices:
+                curr_dim = curr_dim // 2
+                dw = math.ceil(dw / 2)
+                dh = math.ceil(dh / 2)                
+                curr_select = select.repeat_interleave(curr_dim**2)
+                curr_index = index[curr_select]
+                curr_index[:,1] += dh
+                curr_index[:,2] += dw
+                indices.append(curr_index)
 
-            indices = torch.floor(indices).long()
-            indices = indices.flatten(0, 2)
-
-        return indices
+        return indices,dw_og,dh_og,select,self.init_dim*2

@@ -118,6 +118,7 @@ kplanes_olddynamic_method = MethodSpecification(
 kplanes_dynamic_method = MethodSpecification(
     config=TrainerConfig(
         method_name="kplanes-dynamic",
+        gradient_accumulation_steps=5,
         steps_per_eval_batch=150000,
         steps_per_save=1000,
         steps_per_eval_all_images=150000,
@@ -129,17 +130,17 @@ kplanes_dynamic_method = MethodSpecification(
                 #dataparser=DNeRFDataParserConfig(),                                
                 train_num_rays_per_batch=4196 + 1024,
                 eval_num_rays_per_batch=256,
-                camera_res_scale_factor=0.5,  # DNeRF train on 400x400
-                patch_size=2
+                camera_res_scale_factor=1,  # DNeRF train on 400x400
+                patch_size=128
             ),
             model=KPlanesModelConfig(
                 eval_num_rays_per_chunk=1 << 11,
                 grid_base_resolution=[16, 16, 8, 77],  # time-resolution should be half the time-steps
-                grid_feature_dim=512,
+                grid_feature_dim=256,
                 near_plane=0,
                 far_plane=10,
-                num_samples=10,
-                concat_features_across_scales=True,
+                num_samples=8,
+                concat_features_across_scales=False,
                 multiscale_res=[1,2,4],
                 is_contracted=False,
                 use_proposal_weight_anneal=False,
@@ -152,11 +153,11 @@ kplanes_dynamic_method = MethodSpecification(
                 loss_coefficients={
                     "interlevel": 1.0,
                     "distortion": 0.01,
-                    "plane_tv": 0.01,
+                    "plane_tv": 0.0001,
                     "plane_tv_proposal_net": 0.0001,
-                    "l1_time_planes": 0.001,
+                    "l1_time_planes": 0.0001,
                     "l1_time_planes_proposal_net": 0.0001,
-                    "time_smoothness": 0.01,
+                    "time_smoothness": 0.0001,
                     "time_smoothness_proposal_net": 0.001,
                 },
             ),
@@ -171,7 +172,7 @@ kplanes_dynamic_method = MethodSpecification(
                 "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=150000),
             },
             "decoder": {
-                "optimizer": AdamOptimizerConfig(lr=1e-4, eps=1e-12),
+                "optimizer": AdamOptimizerConfig(lr=1e-5, eps=1e-12),
                 "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=150000),
             },            
             #"pose_delts": {

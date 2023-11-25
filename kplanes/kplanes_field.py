@@ -18,6 +18,7 @@ Fields for K-Planes (https://sarafridov.github.io/K-Planes/).
 
 from typing import Dict, Iterable, List, Optional, Tuple, Sequence
 
+import numpy as np
 import torch
 from rich.console import Console
 from torch import nn
@@ -175,12 +176,12 @@ class KPlanesField(Field):
         else:
             self.sigma_net = tcnn.Network(
                 n_input_dims=self.feature_dim,
-                n_output_dims=self.geo_feat_dim + 256, #+ 1,
+                n_output_dims=self.geo_feat_dim * 2, #+ 1,
                 network_config={
                     "otype": "CutlassMLP", #"FullyFusedMLP",
                     "activation": "ReLU",
                     "output_activation": "None",
-                    "n_neurons": 4096, #64
+                    "n_neurons": self.geo_feat_dim * 2 * 4, #64
                     "n_hidden_layers": 2, #1
                 },
             )
@@ -197,12 +198,12 @@ class KPlanesField(Field):
             
             self.color_net = tcnn.Network(
                 n_input_dims=in_dim_color,
-                n_output_dims=256, #3,
+                n_output_dims=self.geo_feat_dim, #3,
                 network_config={
                     "otype": "CutlassMLP", #"FullyFusedMLP",
                     "activation": "ReLU",
                     "output_activation": "None", #"Sigmoid",
-                    "n_neurons": 2048, #64
+                    "n_neurons": in_dim_color * 4, #64
                     "n_hidden_layers": 3, #2
                 },
             )
@@ -216,13 +217,16 @@ class KPlanesField(Field):
         else:
             # From [0, 1] to [-1, 1]
             positions = SceneBox.get_normalized_positions(positions, self.aabb) * 2.0 - 1.0
-
+        #print(ray_samples.shape)
+        #print(positions.shape)
         if self.has_time_planes:
             assert ray_samples.times is not None, "Initialized model with time-planes, but no time data is given"
             # Normalize timestamps from [0, 1] to [-1, 1]
             timestamps = ray_samples.times * 2.0 - 1.0
             positions = torch.cat((positions, timestamps), dim=-1)  # [n_rays, n_samples, 4]
 
+        #print(positions.shape)
+        #exit(-1)
         positions_flat = positions.view(-1, positions.shape[-1])
         time_mask = None
         if "time_mask" in ray_samples.metadata:
@@ -253,7 +257,7 @@ class KPlanesField(Field):
             density_before_activation = self.sigma_net(features).view(*ray_samples.frustums.shape, -1)
         else:
             features = self.sigma_net(features).view(*ray_samples.frustums.shape, -1)
-            features, density_before_activation = torch.split(features, [self.geo_feat_dim, 256], dim=-1) #1], dim=-1)
+            features, density_before_activation = torch.split(features, [self.geo_feat_dim, self.geo_feat_dim], dim=-1) #1], dim=-1)
 
         # Rectifying the density with an exponential is much more stable than a ReLU or
         # softplus, because it enables high post-activation (float32) density outputs
@@ -274,6 +278,18 @@ class KPlanesField(Field):
         else:
             directions = shift_directions_for_tcnn(directions)
             d = self.direction_encoding(directions)
+            #test_d = torch.randn((1,3))
+            #test_d = self.direction_encoding(test_d)
+            #print(test_d.shape)
+            #exit(-1)
+            #print(d.shape)
+            #print(ray_samples.shape)
+            #print(ray_samples.frustums.directions.shape)
+            #print(directions.shape)
+            size = d.shape[0] / (100 * ray_samples.shape[-1])
+            sq_size = np.sqrt(size)
+            #print(size,sq_size)
+
             color_features = [d, density_embedding.view(-1, self.geo_feat_dim)]
             
         if self.appearance_embedding_dim > 0:

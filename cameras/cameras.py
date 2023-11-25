@@ -319,6 +319,7 @@ class Cameras(TensorDataclass):
         keep_shape: Optional[bool] = None,
         disable_distortion: bool = False,
         aabb_box: Optional[SceneBox] = None,
+        ray_mult = 1,
     ) -> RayBundle:
         """Generates rays for the given camera indices.
 
@@ -431,9 +432,9 @@ class Cameras(TensorDataclass):
             index_dim = camera_indices.shape[-1]
             index = camera_indices.reshape(-1, index_dim)[0]
             old_height = self.height
-            self.height = self.height // 8
+            self.height = self.height // ray_mult
             old_width = self.width
-            self.width = self.width // 8
+            self.width = self.width // ray_mult
             coords = cameras.get_image_coords(index=tuple(index))  # (h, w, 2)
             coords = coords.reshape(coords.shape[:2] + (1,) * len(camera_indices.shape[:-1]) + (2,))  # (h, w, 1..., 2)
             coords = coords.expand(coords.shape[:2] + camera_indices.shape[:-1] + (2,))  # (h, w, num_rays, 2)
@@ -468,7 +469,7 @@ class Cameras(TensorDataclass):
         #if booly:
         #    print("AFTER COORDS: {}".format(coords.shape))
         raybundle = cameras._generate_rays_from_coords(
-            camera_indices, coords, camera_opt_to_camera, distortion_params_delta, disable_distortion=disable_distortion
+            camera_indices, coords, camera_opt_to_camera, distortion_params_delta, disable_distortion=disable_distortion,ray_mult=ray_mult
         )
 
         # If we have mandated that we don't keep the shape, then we flatten
@@ -511,6 +512,7 @@ class Cameras(TensorDataclass):
         camera_opt_to_camera: Optional[Float[Tensor, "*num_rays 3 4"]] = None,
         distortion_params_delta: Optional[Float[Tensor, "*num_rays 6"]] = None,
         disable_distortion: bool = False,
+        ray_mult = 1,
     ) -> RayBundle:
         """Generates rays for the given camera indices and coords where self isn't jagged
 
@@ -602,6 +604,11 @@ class Cameras(TensorDataclass):
         x = coords[..., 1]  # (num_rays,) get rid of the last dimension
         fx, fy = self.fx[true_indices].squeeze(-1), self.fy[true_indices].squeeze(-1)  # (num_rays,)
         cx, cy = self.cx[true_indices].squeeze(-1), self.cy[true_indices].squeeze(-1)  # (num_rays,)
+
+        fx = fx / ray_mult
+        fy = fy / ray_mult
+        cx = cx / ray_mult
+        cy = cy / ray_mult        
         assert (
             y.shape == num_rays_shape
             and x.shape == num_rays_shape
@@ -666,6 +673,9 @@ class Cameras(TensorDataclass):
         directions_stack = torch.empty((3,) + num_rays_shape + (3,), device=self.device)
 
         c2w = self.camera_to_worlds[true_indices]
+        c2w_alt = self.camera_to_worlds[true_indices]
+        c2w[...,:3,3] = c2w[0,:3,3] / ray_mult
+
         assert c2w.shape == num_rays_shape + (3, 4)
 
         def _compute_rays_for_omnidirectional_stereo(
