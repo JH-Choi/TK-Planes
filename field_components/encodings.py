@@ -875,37 +875,7 @@ class KPlanesEncoding(Encoding):
             #xyz_static = (xyz_static.reshape(static_mask.shape[0],num_ray_samps,-1) * static_mask.unsqueeze(-1)).reshape(-1,xyz_static.shape[-1])
             #xyz_temporal = (xyz_temporal.reshape(dynamic_mask.shape[0],num_ray_samps,-1) * dynamic_mask.unsqueeze(-1)).reshape(-1,xyz_temporal.shape[-1])
             
-            if False and self.print_idx % 1000 == 0 and self.plane_coefs[0].shape[0] > 16 and self.plane_coefs[0].shape[-1] >= 256:
-                for idx in [0,1,2,3,4,5,6,7,8]:
-                    grid = self.plane_coefs[idx].detach().cpu().numpy()
-                    sub_grid_min = np.min(grid)
-                    sub_grid_max = np.max(grid)                    
-                    for jdx in range(grid.shape[0]):
-                        sub_grid = grid[jdx]
-                        sub_grid = 255 * (sub_grid - sub_grid_min) / (sub_grid_max - sub_grid_min)
-                        reso_x,reso_y = sub_grid.shape
-                        sub_grid = sub_grid.astype(np.uint8)
-                        #sub_grid = cv2.putText(sub_grid,"{},{}".format("%0.3f"%sub_grid_min,"%0.3f"%sub_grid_max),(20,30),
-                        #                       cv2.FONT_HERSHEY_SIMPLEX,0.55,(0,0,0),2)
-                        cv2.imwrite("/home/cmaxey/grid_imgs/sub_grid_{}_{}_{}x{}.png".format(idx,jdx,reso_x,reso_y),sub_grid)
 
-                for idx,kdx,ldx in [(2,4,6),(2,5,7),(4,5,8)]:
-                    grid1 = self.plane_coefs[idx].detach().cpu()[:-1]
-                    grid2 = self.plane_coefs[kdx].detach().cpu()[:-1]
-                    grid3 = self.plane_coefs[ldx].detach().cpu()
-                    grid = (torch.matmul(grid2.transpose(-1,-2),grid1) * grid3).numpy()
-                    sub_grid_min = np.min(grid)
-                    sub_grid_max = np.max(grid)                    
-                    for jdx in range(grid.shape[0]):
-                        sub_grid = grid[jdx]
-                        sub_grid = 255 * (sub_grid - sub_grid_min) / (sub_grid_max - sub_grid_min)
-                        reso_x,reso_y = sub_grid.shape
-                        sub_grid = sub_grid.astype(np.uint8)
-                        #sub_grid = cv2.putText(sub_grid,"{},{}".format("%0.3f"%sub_grid_min,"%0.3f"%sub_grid_max),(20,30),
-                        #                       cv2.FONT_HERSHEY_SIMPLEX,0.55,(0,0,0),2)
-                        cv2.imwrite("/home/cmaxey/grid_imgs/sub_grid_{}{}_{}_{}x{}.png".format(idx,kdx,jdx,reso_x,reso_y),sub_grid)                        
-
-            self.print_idx = (self.print_idx + 1) % 1000
             #xy_tx_ty = proc_func(~time_mask*outputs[0] + time_mask*outputs[2]*outputs[4])
             #xz_tx_tz = proc_func(~time_mask*outputs[1] + time_mask*outputs[2]*outputs[5])
             #yz_ty_tz = proc_func(~time_mask*outputs[3] + time_mask*outputs[4]*outputs[5])            
@@ -917,6 +887,39 @@ class KPlanesEncoding(Encoding):
             yz_ty_tz = (self.proc_func(~time_mask*(outputs[3] + outputs[4].detach()*outputs[5].detach())) +
                                  self.proc_func(time_mask*(outputs[3].detach() + outputs[4]*outputs[5])))
             '''
+
+        if self.print_idx % 1000 == 0: # and self.plane_coefs[0].shape[0] > 16 and self.plane_coefs[0].shape[-1] >= 256:
+            for idx in [0,1,2,3,4,5,6,7,8]:
+                grid = self.plane_coefs[idx].detach().cpu().numpy()
+                sub_grid_min = np.min(grid)
+                sub_grid_max = np.max(grid)                    
+                for jdx in range(grid.shape[0]):
+                    sub_grid = grid[jdx]
+                    sub_grid = 255 * (sub_grid - sub_grid_min) / (sub_grid_max - sub_grid_min)
+                    reso_x,reso_y = sub_grid.shape
+                    sub_grid = sub_grid.astype(np.uint8)
+                    #sub_grid = cv2.putText(sub_grid,"{},{}".format("%0.3f"%sub_grid_min,"%0.3f"%sub_grid_max),(20,30),
+                    #                       cv2.FONT_HERSHEY_SIMPLEX,0.55,(0,0,0),2)
+                    cv2.imwrite("/home/cmaxey/grid_imgs/sub_grid_{}_{}_{}x{}.png".format(idx,jdx,reso_x,reso_y),sub_grid)
+
+            '''
+            for idx,kdx,ldx in [(2,4,6),(2,5,7),(4,5,8)]:
+                grid1 = self.plane_coefs[idx].detach().cpu()#[:-1]
+                grid2 = self.plane_coefs[kdx].detach().cpu()#[:-1]
+                grid3 = self.plane_coefs[ldx].detach().cpu()
+                grid = (torch.matmul(grid2.transpose(-1,-2),grid1) * grid3).numpy()
+                sub_grid_min = np.min(grid)
+                sub_grid_max = np.max(grid)                    
+                for jdx in range(grid.shape[0]):
+                    sub_grid = grid[jdx]
+                    sub_grid = 255 * (sub_grid - sub_grid_min) / (sub_grid_max - sub_grid_min)
+                    reso_x,reso_y = sub_grid.shape
+                    sub_grid = sub_grid.astype(np.uint8)
+                    #sub_grid = cv2.putText(sub_grid,"{},{}".format("%0.3f"%sub_grid_min,"%0.3f"%sub_grid_max),(20,30),
+                    #                       cv2.FONT_HERSHEY_SIMPLEX,0.55,(0,0,0),2)
+                    cv2.imwrite("/home/cmaxey/grid_imgs/sub_grid_{}{}_{}_{}x{}.png".format(idx,kdx,jdx,reso_x,reso_y),sub_grid)                        
+            '''
+        self.print_idx = (self.print_idx + 1) % 1000
             
         #xy_tx_ty = proc_func(outputs[0]) + proc_func(outputs[2]*outputs[4])
         #xz_tx_tz = proc_func(outputs[1]) + proc_func(outputs[2]*outputs[5])

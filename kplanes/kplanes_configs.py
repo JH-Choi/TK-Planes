@@ -118,7 +118,7 @@ kplanes_olddynamic_method = MethodSpecification(
 kplanes_dynamic_method = MethodSpecification(
     config=TrainerConfig(
         method_name="kplanes-dynamic",
-        gradient_accumulation_steps=5,
+        gradient_accumulation_steps=1,
         steps_per_eval_batch=150000,
         steps_per_save=1000,
         steps_per_eval_all_images=150000,
@@ -153,12 +153,12 @@ kplanes_dynamic_method = MethodSpecification(
                 loss_coefficients={
                     "interlevel": 1.0,
                     "distortion": 0.01,
-                    "plane_tv": 0.0001,
-                    "plane_tv_proposal_net": 0.0001,
-                    "l1_time_planes": 0.0001,
-                    "l1_time_planes_proposal_net": 0.0001,
-                    "time_smoothness": 0.0001,
-                    "time_smoothness_proposal_net": 0.001,
+                    "plane_tv": 0.000001,
+                    "plane_tv_proposal_net": 0.000001,
+                    "l1_time_planes": 0.000001,
+                    "l1_time_planes_proposal_net": 0.000001,
+                    "time_smoothness": 0.000001,
+                    "time_smoothness_proposal_net": 0.000001,
                 },
             ),
         ),
@@ -172,7 +172,7 @@ kplanes_dynamic_method = MethodSpecification(
                 "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=150000),
             },
             "decoder": {
-                "optimizer": AdamOptimizerConfig(lr=1e-5, eps=1e-12),
+                "optimizer": AdamOptimizerConfig(lr=3e-5, eps=1e-12),
                 "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=150000),
             },            
             #"pose_delts": {

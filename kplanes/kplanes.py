@@ -190,20 +190,23 @@ class KPlanesModel(Model):
                 grid_base_resolution=curr_res,
                 grid_feature_dim=feat_dim,
                 concat_across_scales=self.config.concat_features_across_scales,
-                multiscale_res=[scale],
+                multiscale_res=[1],
                 spatial_distortion=scene_contraction,
                 appearance_embedding_dim=self.config.appearance_embedding_dim,
                 use_average_appearance_embedding=self.config.use_average_appearance_embedding,
                 linear_decoder=self.config.linear_decoder,
                 linear_decoder_layers=self.config.linear_decoder_layers,
             )
+            #for g in field.grids:
+            #    for p in g.plane_coefs:
+            #        print(p.shape)
             self.fields.append(field)
             scale = scale // 2
             feat_dim = feat_dim * 2
             curr_res = [res // 2 if idx < 3 else res for idx,res in enumerate(curr_res)]
 
         self.fields = torch.nn.ModuleList(self.fields)
-
+        #exit(-1)
         #self.field = KPlanesField(
         #    self.scene_box.aabb,
         #    num_images=self.num_train_data,
