@@ -144,7 +144,7 @@ class PixelSampler:
         #indices[:, 0] = batch["image_idx"][c]
         
         collated_batch["indices"] = indices  # with the abs camera indices
-
+        
         if keep_full_image:
             collated_batch["full_image"] = batch["image"][select]
             image_arr = []
@@ -372,13 +372,13 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
         self.indices = []
         self.num_to_select = 153
         num_images = 153
-        curr_dim = self.patch_size // 2
+        curr_dim = self.patch_size# // 2
         #self.init_dim = curr_dim
         for idx in range(3):
             batch_size = (curr_dim**2)*num_images
             curr_indices = super().sample_method(batch_size, num_images, curr_dim, curr_dim, mask=None, all_pixels=True) #device="cuda:0",all_pixels=True)
             self.indices.append(curr_indices)
-            curr_dim = curr_dim // 2
+            #curr_dim = curr_dim // 2
         #select = torch.randn(153) > 1.5
         #select = select.repeat_interleave(curr_dim**2)
         #print(indices1.shape)
@@ -431,9 +431,6 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
             dw_og = dw #list(dw.numpy())
             dh_og = dh #list(dh.numpy())
             for index in self.indices:
-                curr_dim = curr_dim // 2
-                dw = torch.ceil(dw / 2).to(int)
-                dh = torch.ceil(dh / 2).to(int)
                 curr_dw = dw.repeat_interleave(curr_dim**2)
                 curr_dh = dh.repeat_interleave(curr_dim**2)
 
@@ -441,7 +438,11 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
                 curr_index = index[curr_select]
                 curr_index[:,1] += curr_dh
                 curr_index[:,2] += curr_dw
-                divvy = math.sqrt(curr_index.shape[0] / self.num_to_select)
+                #divvy = math.sqrt(curr_index.shape[0] / self.num_to_select)
                 indices.append(curr_index)
-                    
+                #curr_dim = curr_dim // 2
+                #dw = torch.ceil(dw / 2).to(int)
+                #dh = torch.ceil(dh / 2).to(int)
+
+                
         return indices,dw_og,dh_og,select,self.patch_size #self.init_dim*2

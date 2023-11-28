@@ -60,7 +60,7 @@ from nerfstudio.utils import colormaps, misc
 
 from .kplanes_field import KPlanesDensityField, KPlanesField
 from .LimitGradLayer import LimitGradLayer
-from .decoder import ImageDecoder
+from .decoder import ImageDecoder, conv3x3
 
 @dataclass
 class KPlanesModelConfig(ModelConfig):
@@ -239,6 +239,18 @@ class KPlanesModel(Model):
         self.pos_idx = 0
         self.camera_pose_delts = torch.nn.ParameterList([rot_angs,pos_diff])
 
+        self.ray_bundle_encoder_origin = [torch.nn.Sequential(conv3x3(3,9,stride=2),
+                                                              torch.nn.ReLU(),
+                                                              conv3x3(9,27),
+                                                              torch.nn.ReLU(),
+                                                              conv3x3(27,3)) for _ in range(3)]
+
+        self.ray_bundle_encoder_dirs = [torch.nn.Sequential(conv3x3(3,9,stride=2),
+                                                            torch.nn.ReLU(),
+                                                            conv3x3(9,27),
+                                                            torch.nn.ReLU(),
+                                                            conv3x3(27,3)) for _ in range(3)]        
+        
         self.final_dim = self.config.patch_size
         self.decoder = ImageDecoder(input_dim=(self.final_dim // 8,self.final_dim // 8),
                                     final_dim=(self.final_dim,self.final_dim),
@@ -423,6 +435,8 @@ class KPlanesModel(Model):
         rgb_images = []
 
         for rbidx,ray_bundle in enumerate(ray_bundles):
+            print(ray_bundle.origins.shape)
+            exit(-1)
             orig_shape = None
             if len(ray_bundle.shape) > 1:
                 orig_shape = ray_bundle.shape
