@@ -65,7 +65,7 @@ class UpConv(nn.Module):
     A helper Module that performs 2 convolutions and 1 UpConvolution.
     A ReLU activation follows each convolution.
     """
-    def __init__(self, in_channels, out_channels, final_layer=False, mode='transpose', curr_dim=None):
+    def __init__(self, in_channels, out_channels, final_layer=False, mode='transpose', curr_dim=None, first_layer=False):
         super(UpConv, self).__init__()
 
         #self.relu = nn.GELU()
@@ -75,33 +75,43 @@ class UpConv(nn.Module):
         self.final_layer = final_layer
 
         #self.curr_dim = (self.out_channels,curr_dim,curr_dim)
-        
+
+        if not first_layer:
+            self.preprocess = nn.Sequential(conv3x3(self.in_channels, 2*self.in_channels),self.relu,
+                                            conv3x3(2*self.in_channels, self.in_channels // 2), self.relu)
+            self.in_channels = self.in_channels // 2
+            self.norm1 = nn.InstanceNorm2d(self.in_channels,affine=True)                    
+        else:
+            self.preprocess = nn.Identity()
+            self.norm1 = nn.Identity()
+            
         #self.norm0 = nn.InstanceNorm2d(self.in_channels,affine=True)
         #self.norm0 = nn.LayerNorm([self.in_channels,curr_dim,curr_dim],elementwise_affine=True)        
         #self.conv1 = torch.nn.utils.spectral_norm(upconv2x2(self.in_channels, self.out_channels, mode))
-        self.conv1 = upconv2x2(self.in_channels, self.in_channels, mode)
-        self.norm1 = nn.InstanceNorm2d(self.in_channels,affine=True)
+
+        self.conv1 = upconv2x2(self.in_channels, 2*self.in_channels, mode)
         #self.norm1 = nn.LayerNorm([self.in_channels,curr_dim,curr_dim],elementwise_affine=True)
         #self.norm1 = torch.nn.Identity()
         #curr_dim *= 2
-        self.norm2 = nn.InstanceNorm2d(self.in_channels,affine=True)        
-        self.conv2 = conv3x3(self.in_channels, 2*self.in_channels)
+        self.norm2 = nn.InstanceNorm2d(2*self.in_channels,affine=True)        
+        self.conv2 = conv3x3(2*self.in_channels, 4*self.in_channels)
         #self.norm2 = nn.Identity()
         #self.norm2 = nn.InstanceNorm2d(self.out_channels,affine=True)
         #self.norm2 = nn.LayerNorm([self.out_channels,curr_dim,curr_dim]) #,elementwise_affine=True)        
         #self.conv3 = torch.nn.utils.spectral_norm(conv5x5(self.out_channels, self.out_channels))
-        self.norm3 = nn.InstanceNorm2d(2*self.in_channels,affine=True)        
-        self.conv3 = conv3x3(2*self.in_channels, 2*self.in_channels)
-        self.norm4 = nn.InstanceNorm2d(2*self.in_channels,affine=True)        
-        self.conv4 = conv3x3(2*self.in_channels, self.out_channels)        
+        #self.norm3 = nn.InstanceNorm2d(4*self.in_channels,affine=True)        
+        #self.conv3 = conv3x3(4*self.in_channels, 2*self.in_channels)
+        self.norm4 = nn.InstanceNorm2d(4*self.in_channels,affine=True)        
+        self.conv4 = conv3x3(4*self.in_channels, self.out_channels)        
         #self.norm3 = nn.Identity()
         #self.norm3 = nn.InstanceNorm2d(self.out_channels,affine=True)
         #self.norm3 = nn.LayerNorm([self.out_channels,curr_dim,curr_dim]) #,elementwise_affine=True)
         #self.drop = nn.Dropout(0.3)
 
         #self.skippy = nn.Sequential(nn.InstanceNorm2d(self.in_channels),upconv2x2(self.in_channels,self.out_channels,mode='upsample'))
-        self.skippy1 = nn.Sequential(nn.InstanceNorm2d(self.in_channels),upconv2x2(self.in_channels,2*self.in_channels,mode='upsample'))
-        self.skippy2 = nn.Sequential(nn.InstanceNorm2d(2*self.in_channels),conv1x1(2*self.in_channels,self.out_channels))        
+        self.skippy = nn.Sequential(conv1x1(2*self.in_channels,self.out_channels))
+        #self.skippy1 = nn.Sequential(upconv2x2(self.in_channels,2*self.in_channels,mode='upsample'))        
+        #self.skippy2 = nn.Sequential(conv1x1(2*self.in_channels,self.out_channels))        
         if final_layer:
             self.conv_final = nn.Sequential(#nn.InstanceNorm2d(self.out_channels),
                 conv3x3(self.out_channels, self.out_channels // 2),
@@ -113,8 +123,8 @@ class UpConv(nn.Module):
                 conv1x1(self.out_channels // 4, 3),
                 #nn.InstanceNorm2d(3),
                 #nn.Tanh())
-                nn.Sigmoid())
-
+                nn.Sigmoid()
+            )
     def forward(self, x):
         """ Forward pass
         Arguments:
@@ -122,20 +132,25 @@ class UpConv(nn.Module):
             from_up: upconv'd tensor from the decoder pathway
         """
 
-        skip_x1 = self.skippy1(x)
+        #skip_x1 = self.skippy1(x)
+        x = self.preprocess(x)
         x = self.relu(self.conv1(self.norm1(x)))
-        x = self.relu(self.conv2(self.norm2(x)))
-        x = x + skip_x1
+        x = self.norm2(x)
+        skip_x = self.skippy(x)
+        x = self.relu(self.conv2(x))
+        #x = x + skip_x1
 
-        skip_x2 = self.skippy2(x)
-        x = self.relu(self.conv3(self.norm3(x)))
+        #skip_x2 = self.skippy2(x)
+        #x = self.relu(self.conv3(self.norm3(x)))
         x = self.relu(self.conv4(self.norm4(x)))        
 
         #x = self.relu(self.norm1(self.conv1(x)))
         #x = self.relu(self.norm2(self.conv2(x)))
         #x = self.relu(self.norm3(self.conv3(x)))
                 
-        x = x + skip_x2
+        #x = x + skip_x2
+        x = x + skip_x
+        
         if self.final_layer:
             x = self.conv_final(x)
             
@@ -161,7 +176,7 @@ class ImageDecoder(nn.Module):
                 in_feature_dim = self.feature_dim
                 out_feature_dim = self.feature_dim // 2                
 
-            self.layers.append(UpConv(in_feature_dim,out_feature_dim,input_dim[0] == final_dim[0],mode,input_dim[0]))            
+            self.layers.append(UpConv(in_feature_dim,out_feature_dim,input_dim[0] == final_dim[0],mode,input_dim[0],not done_first_loop))
             self.feature_dim = self.feature_dim // 2
             done_first_loop = True
             

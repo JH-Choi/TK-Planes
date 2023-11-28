@@ -242,7 +242,7 @@ class KPlanesModel(Model):
         self.final_dim = self.config.patch_size
         self.decoder = ImageDecoder(input_dim=(self.final_dim // 8,self.final_dim // 8),
                                     final_dim=(self.final_dim,self.final_dim),
-                                    feature_dim=self.config.grid_feature_dim // 2,mode='upsample')
+                                    feature_dim=self.config.grid_feature_dim // 2,mode='transpose')
         
         self.density_fns = []
         num_prop_nets = self.config.num_proposal_iterations

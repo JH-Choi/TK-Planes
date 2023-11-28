@@ -888,7 +888,7 @@ class KPlanesEncoding(Encoding):
                                  self.proc_func(time_mask*(outputs[3].detach() + outputs[4]*outputs[5])))
             '''
 
-        if self.print_idx % 1000 == 0: # and self.plane_coefs[0].shape[0] > 16 and self.plane_coefs[0].shape[-1] >= 256:
+        if False and self.print_idx % 1000 == 0: # and self.plane_coefs[0].shape[0] > 16 and self.plane_coefs[0].shape[-1] >= 256:
             for idx in [0,1,2,3,4,5,6,7,8]:
                 grid = self.plane_coefs[idx].detach().cpu().numpy()
                 sub_grid_min = np.min(grid)

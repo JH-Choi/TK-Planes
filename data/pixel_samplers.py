@@ -370,7 +370,7 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
         num_rays = (num_rays_per_batch // (self.patch_size**2)) * (self.patch_size**2)
         self.keep_full_image = keep_full_image
         self.indices = []
-        self.num_to_select = 25
+        self.num_to_select = 153
         num_images = 153
         curr_dim = self.patch_size // 2
         #self.init_dim = curr_dim
