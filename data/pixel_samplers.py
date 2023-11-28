@@ -146,7 +146,11 @@ class PixelSampler:
         collated_batch["indices"] = indices  # with the abs camera indices
 
         if keep_full_image:
-            collated_batch["full_image"] = batch["image"][select,dh:dh+xy_dim,dw:dw+xy_dim]
+            collated_batch["full_image"] = batch["image"][select]
+            image_arr = []
+            for img_idx in range(dh.shape[0]):
+                image_arr.append(collated_batch["full_image"][img_idx,dh[img_idx]:dh[img_idx]+xy_dim,dw[img_idx]:dw[img_idx]+xy_dim].unsqueeze(0))
+            collated_batch["full_image"] = torch.concat(image_arr,dim=0)
 
         return collated_batch
 
@@ -366,13 +370,13 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
         num_rays = (num_rays_per_batch // (self.patch_size**2)) * (self.patch_size**2)
         self.keep_full_image = keep_full_image
         self.indices = []
-        self.num_to_select = 100
+        self.num_to_select = 25
         num_images = 153
-        curr_dim = 32 // 2
-        self.init_dim = curr_dim
+        curr_dim = self.patch_size // 2
+        #self.init_dim = curr_dim
         for idx in range(3):
             batch_size = (curr_dim**2)*num_images
-            curr_indices = super().sample_method(batch_size, num_images, curr_dim, curr_dim, mask=None, device="cuda:0",all_pixels=True)
+            curr_indices = super().sample_method(batch_size, num_images, curr_dim, curr_dim, mask=None, all_pixels=True) #device="cuda:0",all_pixels=True)
             self.indices.append(curr_indices)
             curr_dim = curr_dim // 2
         #select = torch.randn(153) > 1.5
@@ -415,22 +419,29 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
 
             curr_select_idxs = self.select_idxs[:self.num_to_select]
             self.select_idxs = self.select_idxs[self.num_to_select:]
-            select = torch.zeros(153).to(bool)
+            select = torch.zeros(153,device=self.indices[0].device).to(bool)
             select[curr_select_idxs] = True
-            curr_dim = self.init_dim * 2
+            curr_dim = self.patch_size #self.init_dim * 2
             indices = []
-            dw = random.randint(0,image_width - curr_dim - 1)
-            dh = random.randint(0,image_height - curr_dim - 1)
-            dw_og = dw
-            dh_og = dh
+            #dw = random.randint(0,image_width - curr_dim - 1)
+            #dh = random.randint(0,image_height - curr_dim - 1)
+            dw = (torch.rand(self.num_to_select,device=self.indices[0].device) * (image_width - curr_dim - 1)).to(int)
+            dh = (torch.rand(self.num_to_select,device=self.indices[0].device) * (image_height - curr_dim - 1)).to(int)
+            #dw = dw.repeat_interleave(3).repeat(2)
+            dw_og = dw #list(dw.numpy())
+            dh_og = dh #list(dh.numpy())
             for index in self.indices:
                 curr_dim = curr_dim // 2
-                dw = math.ceil(dw / 2)
-                dh = math.ceil(dh / 2)                
+                dw = torch.ceil(dw / 2).to(int)
+                dh = torch.ceil(dh / 2).to(int)
+                curr_dw = dw.repeat_interleave(curr_dim**2)
+                curr_dh = dh.repeat_interleave(curr_dim**2)
+
                 curr_select = select.repeat_interleave(curr_dim**2)
                 curr_index = index[curr_select]
-                curr_index[:,1] += dh
-                curr_index[:,2] += dw
+                curr_index[:,1] += curr_dh
+                curr_index[:,2] += curr_dw
+                divvy = math.sqrt(curr_index.shape[0] / self.num_to_select)
                 indices.append(curr_index)
-
-        return indices,dw_og,dh_og,select,self.init_dim*2
+                    
+        return indices,dw_og,dh_og,select,self.patch_size #self.init_dim*2

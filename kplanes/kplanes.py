@@ -74,6 +74,9 @@ class KPlanesModelConfig(ModelConfig):
     far_plane: float = 6.0
     """How far along the ray to stop sampling."""
 
+    patch_size: int = 32
+    """How big a patch to render with tiered feature maps."""
+    
     grid_base_resolution: List[int] = field(default_factory=lambda: [128, 128, 128])
     """Base grid resolution."""
 
@@ -236,7 +239,7 @@ class KPlanesModel(Model):
         self.pos_idx = 0
         self.camera_pose_delts = torch.nn.ParameterList([rot_angs,pos_diff])
 
-        self.final_dim = 32
+        self.final_dim = self.config.patch_size
         self.decoder = ImageDecoder(input_dim=(self.final_dim // 8,self.final_dim // 8),
                                     final_dim=(self.final_dim,self.final_dim),
                                     feature_dim=self.config.grid_feature_dim // 2,mode='upsample')
@@ -454,7 +457,6 @@ class KPlanesModel(Model):
             num_samps = num_samps // 2
             
         reconst_image = self.decoder(rgb_images).permute(0,2,3,1) #.unsqueeze(0)).permute(0,2,3,1)
-        
         self.img_save_counter = (self.img_save_counter + 1) % 50
         if self.img_save_counter == 0:
             self.reconst_image_np = reconst_image.detach().cpu().reshape(-1,reconst_image.shape[2],reconst_image.shape[3]).numpy()
