@@ -116,7 +116,7 @@ class KPlanesField(Field):
 
         self.register_buffer("aabb", aabb)
         self.num_images = num_images
-        self.geo_feat_dim = (grid_feature_dim // 2) #- 1 #geo_feat_dim
+        self.geo_feat_dim = (grid_feature_dim // 4) #- 1 #geo_feat_dim
         self.grid_base_resolution = list(grid_base_resolution)
         self.concat_across_scales = concat_across_scales
         self.spatial_distortion = spatial_distortion
@@ -182,14 +182,14 @@ class KPlanesField(Field):
                     "activation": "ReLU",
                     "output_activation": "None",
                     "n_neurons": self.geo_feat_dim * 2 * 4, #64
-                    "n_hidden_layers": 2, #1
+                    "n_hidden_layers": 1, #1
                 },
             )
             self.direction_encoding = tcnn.Encoding(
                 n_input_dims=3,
                 encoding_config={
                     "otype": "SphericalHarmonics",
-                    "degree": 8, #4,
+                    "degree": 4, #4,
                 },
             )
             in_dim_color = (
@@ -204,7 +204,7 @@ class KPlanesField(Field):
                     "activation": "ReLU",
                     "output_activation": "None", #"Sigmoid",
                     "n_neurons": in_dim_color * 4, #64
-                    "n_hidden_layers": 3, #2
+                    "n_hidden_layers": 2, #2
                 },
             )
 
@@ -286,8 +286,8 @@ class KPlanesField(Field):
             #print(ray_samples.shape)
             #print(ray_samples.frustums.directions.shape)
             #print(directions.shape)
-            size = d.shape[0] / (100 * ray_samples.shape[-1])
-            sq_size = np.sqrt(size)
+            #size = d.shape[0] / (100 * ray_samples.shape[-1])
+            #sq_size = np.sqrt(size)
             #print(size,sq_size)
 
             color_features = [d, density_embedding.view(-1, self.geo_feat_dim)]

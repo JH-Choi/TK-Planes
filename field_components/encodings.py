@@ -673,6 +673,7 @@ class KPlanesEncoding(Encoding):
             self.plane_coefs.append(new_plane_coef)
 
         bias_bool = False
+        
         self.output_head = nn.Sequential(
             nn.Linear(self.num_components*2, self.num_components*4, bias=bias_bool),
             #nn.LayerNorm(self.num_components*4),
@@ -684,6 +685,7 @@ class KPlanesEncoding(Encoding):
             #nn.LayerNorm(self.num_components*4),
             nn.ReLU(),            
             nn.Linear(self.num_components*4, self.num_components, bias=bias_bool))
+        
         #self.time_freq_conv = nn.ModuleList([
         #    nn.Sequential(
         #        nn.Conv2d(num_components,2*num_components,3,1,padding=1,bias=False,dtype=torch.complex64),
@@ -947,7 +949,7 @@ class KPlanesEncoding(Encoding):
                                                             #outputs[2][:,self.num_components:],
                                                             #outputs[4][:,self.num_components:],
                                                             #outputs[5][:,self.num_components:]],dim=-1)))
-        
+        #output = xyz_static + xyz_temporal
         #output = ((outputs[0] + tx_ty) *
         #          (outputs[1] + tx_tz) *
         #          (outputs[3] + ty_tz))

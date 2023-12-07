@@ -60,4 +60,5 @@ class RayGenerator(nn.Module):
             camera_opt_to_camera=camera_opt_to_camera,
             ray_mult = ray_mult
         )
+        
         return ray_bundle

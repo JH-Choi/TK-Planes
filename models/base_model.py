@@ -138,12 +138,13 @@ class Model(nn.Module):
 
         if self.collider is not None:
             ray_bundles = []
+            cidx = [0,0,1,2]
+
             for idx,rb in enumerate(ray_bundle):
-                rb = self.colliders[idx](rb)
+                rb = self.colliders[cidx[idx]](rb)
                 ray_bundles.append(rb)
 
             #ray_bundle = self.collider(ray_bundle)            
-
         return self.get_outputs(ray_bundles)
 
     def get_metrics_dict(self, outputs, batch) -> Dict[str, torch.Tensor]:
@@ -177,7 +178,7 @@ class Model(nn.Module):
         image_height, image_width = camera_ray_bundle.origins.shape[:2]
         num_rays_per_chunk = image_height * image_width
         num_rays = len(camera_ray_bundle)
-        #print("OUTS BUN: {}".format(num_rays))        
+        #print("OUTS BUN: {}".format(num_rays))
         outputs_lists = defaultdict(list)
         for i in range(0, num_rays, num_rays_per_chunk):
             start_idx = i

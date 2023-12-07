@@ -478,7 +478,7 @@ class Cameras(TensorDataclass):
 
 
         #print("KEEP SHAPE: {}, {}".format(keep_shape,raybundle.shape))
-            
+
         if aabb_box:
             with torch.no_grad():
                 tensor_aabb = Parameter(aabb_box.aabb.flatten(), requires_grad=False)
@@ -673,8 +673,8 @@ class Cameras(TensorDataclass):
         directions_stack = torch.empty((3,) + num_rays_shape + (3,), device=self.device)
 
         c2w = self.camera_to_worlds[true_indices]
-        c2w_alt = self.camera_to_worlds[true_indices]
-        c2w[...,:3,3] = c2w[0,:3,3] / ray_mult
+        #c2w_alt = self.camera_to_worlds[true_indices]
+        #c2w[...,:3,3] = c2w[0,:3,3] / ray_mult
 
         assert c2w.shape == num_rays_shape + (3, 4)
 

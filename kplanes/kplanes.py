@@ -60,7 +60,7 @@ from nerfstudio.utils import colormaps, misc
 
 from .kplanes_field import KPlanesDensityField, KPlanesField
 from .LimitGradLayer import LimitGradLayer
-from .decoder import ImageDecoder, conv3x3
+from .decoder import ImageDecoder, conv3x3, conv2x2, conv1x1
 
 @dataclass
 class KPlanesModelConfig(ModelConfig):
@@ -183,8 +183,9 @@ class KPlanesModel(Model):
         scale = 4
         feat_dim = self.config.grid_feature_dim // 4
         self.start_feat_dim = feat_dim
-        curr_res = [res * 4 if idx < 3 else res for idx,res in enumerate(self.config.grid_base_resolution)]
 
+        curr_res = [res * 4 if idx < 3 else res for idx,res in enumerate(self.config.grid_base_resolution)]
+        self.patch_size = self.config.patch_size
         self.fields = []
         for scale in [4,2,1]:
             field = KPlanesField(
@@ -234,27 +235,27 @@ class KPlanesModel(Model):
 
         self.prev_image = None
         
-        rot_angs = torch.nn.Parameter(torch.zeros(3,153))
-        pos_diff = torch.nn.Parameter(torch.zeros(153,3))
-        self.pos_idx = 0
-        self.camera_pose_delts = torch.nn.ParameterList([rot_angs,pos_diff])
+        #rot_angs = torch.nn.Parameter(torch.zeros(3,153))
+        #pos_diff = torch.nn.Parameter(torch.zeros(153,3))
+        #self.pos_idx = 0
+        #self.camera_pose_delts = torch.nn.ParameterList([rot_angs,pos_diff])
 
-        self.ray_bundle_encoder_origin = [torch.nn.Sequential(conv3x3(3,9,stride=2),
-                                                              torch.nn.ReLU(),
-                                                              conv3x3(9,27),
-                                                              torch.nn.ReLU(),
-                                                              conv3x3(27,3)) for _ in range(3)]
-
-        self.ray_bundle_encoder_dirs = [torch.nn.Sequential(conv3x3(3,9,stride=2),
-                                                            torch.nn.ReLU(),
-                                                            conv3x3(9,27),
-                                                            torch.nn.ReLU(),
-                                                            conv3x3(27,3)) for _ in range(3)]        
+        self.ray_bundle_encoder = [torch.nn.AvgPool2d(2) for _ in range(3)]
         
+        #self.ray_bundle_encoder = [torch.nn.Sequential(conv2x2(9,18,stride=2,padding=0),
+        #                                               torch.nn.ReLU(),
+        #                                               conv2x2(18,9,stride=1,padding=1)) for _ in range(3)]
+
+        #for encoder in self.ray_bundle_encoder:
+        #    for m in encoder:
+        #        if type(m) == torch.nn.Conv2d:
+        #            torch.nn.init.normal(m.weight.data,0.25,0.05)
+        
+        #self.ray_bundle_encoder = torch.nn.ModuleList(self.ray_bundle_encoder)
         self.final_dim = self.config.patch_size
         self.decoder = ImageDecoder(input_dim=(self.final_dim // 8,self.final_dim // 8),
                                     final_dim=(self.final_dim,self.final_dim),
-                                    feature_dim=self.config.grid_feature_dim // 2,mode='transpose')
+                                    feature_dim=self.config.grid_feature_dim // 4,mode='upscale')
         
         self.density_fns = []
         num_prop_nets = self.config.num_proposal_iterations
@@ -316,7 +317,7 @@ class KPlanesModel(Model):
             collider = NearFarCollider(near_plane=self.config.near_plane / i, far_plane=self.config.far_plane*i)
             self.colliders.append(collider)
         self.colliders = torch.nn.ModuleList(self.colliders)
-        
+
         # renderers
         self.renderer_rgb = FeatureRenderer(background_color=self.config.background_color)
         #self.renderer_accumulation = AccumulationRenderer()
@@ -340,6 +341,7 @@ class KPlanesModel(Model):
             #"proposal_networks": list(self.proposal_networks.parameters()),
             "fields": list(self.fields.parameters()),
             "decoder": list(self.decoder.parameters()),
+            #"ray_bundle_encoder": list(self.ray_bundle_encoder.parameters()),
             #"pose_delts": self.camera_pose_delts,
         }
         return param_groups
@@ -425,18 +427,39 @@ class KPlanesModel(Model):
         #new_origins = ray_bundles[0].directions.reshape(100,int(sq_size),int(sq_size),-1)
         #print(size,sq_size)
         #print(new_origins.shape)
+        #for rb in ray_bundles:
+        #    print(rb.shape)
         #exit(-1)
         weights_list = []
         ray_samples_list = []
         self.vol_tvs = []
         num_samps = self.config.num_samples*4 # 2**2 for three stages
-        feat_dim = self.start_feat_dim // 2
+        feat_dim = self.start_feat_dim // 4
         curr_dim = self.final_dim // 2
         rgb_images = []
+        ray_bundle = ray_bundles[0]
 
-        for rbidx,ray_bundle in enumerate(ray_bundles):
-            print(ray_bundle.origins.shape)
-            exit(-1)
+        ray_stuffs = [ray_bundle.origins,
+                      ray_bundle.directions,
+                      ray_bundle.pixel_area,
+                      ray_bundle.nears,
+                      ray_bundle.fars]
+        ray_stuffs = torch.concat(ray_stuffs,dim=-1)
+        ray_stuffs = ray_stuffs.reshape(-1,self.patch_size,self.patch_size,ray_stuffs.shape[-1]).permute(0,3,1,2)
+        for rbidx,ray_bundle in enumerate(ray_bundles[1:]):
+            ray_stuffs = self.ray_bundle_encoder[rbidx](ray_stuffs)
+
+            new_ray_bundle_stuffs = ray_stuffs.permute(0,2,3,1).reshape(-1,ray_stuffs.shape[1])
+            new_ray_bundle_stuffs[:,:3] = new_ray_bundle_stuffs[:,:3] / 2
+            #new_ray_bundle_stuffs[:,6] = new_ray_bundle_stuffs[:,6] / 4
+            new_ray_bundle_stuffs[:,7] = new_ray_bundle_stuffs[:,7] / 2
+            new_ray_bundle_stuffs[:,8] = new_ray_bundle_stuffs[:,8] / 2            
+            ray_bundle.origins = new_ray_bundle_stuffs[:,:3]
+            ray_bundle.directions = new_ray_bundle_stuffs[:,3:6]
+            ray_bundle.pixel_area = new_ray_bundle_stuffs[:,6].unsqueeze(-1)
+            ray_bundle.nears = new_ray_bundle_stuffs[:,7].unsqueeze(-1)
+            ray_bundle.fars = new_ray_bundle_stuffs[:,8].unsqueeze(-1)
+
             orig_shape = None
             if len(ray_bundle.shape) > 1:
                 orig_shape = ray_bundle.shape
@@ -469,7 +492,7 @@ class KPlanesModel(Model):
             curr_dim = curr_dim // 2
             feat_dim = feat_dim * 2
             num_samps = num_samps // 2
-            
+
         reconst_image = self.decoder(rgb_images).permute(0,2,3,1) #.unsqueeze(0)).permute(0,2,3,1)
         self.img_save_counter = (self.img_save_counter + 1) % 50
         if self.img_save_counter == 0:
@@ -559,7 +582,7 @@ class KPlanesModel(Model):
             #for idx in range(image.shape[0]):
             #    curr_reconst_image_np = (reconst_image_np[idx]*255).astype(np.uint8)
             #    curr_reconst_image_np = curr_reconst_image_np[:,:,[2,1,0]]
-            cv2.imwrite("test_feature_img.png",combo_image_np)
+            cv2.imwrite("test_feature_img_alt.png",combo_image_np)
         
         #if self.prev_image is None:
         #    self.prev_image = image
@@ -579,7 +602,13 @@ class KPlanesModel(Model):
         #mask_image = mask_image / 255.
         #image = image*(1 - image_mask_bool) + mask_image*image_mask_bool
         #image = (1 - image_mask) + red_image*image_mask
-        loss_dict = {"rgb": self.rgb_loss(image.reshape(-1,3), outputs["rgb"])}
+        output_rgb = outputs["rgb"].view(image.shape)
+        patch_weights = batch["patch_weights"].to(output_rgb.device)
+
+        rgb_loss = torch.sum(((image - output_rgb)**2).mean((1,2,3))*patch_weights)
+
+        loss_dict = {"rgb": rgb_loss}
+        #loss_dict = {"rgb": self.rgb_loss(image.reshape(-1,3), outputs["rgb"])}
         #loss_dict = {"rgb": self.rgb_loss(self.field.masks*image, outputs["rgb"])}        
         self.cosine_idx += 1
 
@@ -633,7 +662,7 @@ class KPlanesModel(Model):
             #loss_dict["camera_delts"] += (torch.abs(self.pos_diff[non_zero_idxs])*image_diff).mean()
             #loss_dict["camera_delts"] = (torch.abs(self.rot_angs*image_diff)).mean()
             #loss_dict["camera_delts"] += (torch.abs(self.pos_diff*image_diff)).mean()
-            loss_dict["local_vol_tvs"] = 1.0*local_vol_tvs / (3*len(outputs_lst))
+            loss_dict["local_vol_tvs"] = 1*local_vol_tvs / (3*len(outputs_lst))
             #loss_dict["grid_norm"] = 0.01*grid_norm / (6*len(outputs_lst))
             
             #loss_dict["time_masks"] = time_mask_loss
