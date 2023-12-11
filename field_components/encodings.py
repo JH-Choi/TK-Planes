@@ -621,6 +621,7 @@ class KPlanesEncoding(Encoding):
         self,
         resolution: Sequence[int] = (128, 128, 128),
         num_components: int = 64,
+            select_dim: int = 32,
         init_a: float = 0.1,
         init_b: float = 0.5,
         reduce: Literal["sum", "product"] = "product",
@@ -629,6 +630,7 @@ class KPlanesEncoding(Encoding):
 
         self.resolution = resolution
         self.num_components = num_components
+        self.select_dim = select_dim
         self.reduce = reduce
         if self.in_dim not in {3, 4}:
             raise ValueError(
@@ -649,15 +651,25 @@ class KPlanesEncoding(Encoding):
         # (y, x), (z, x), (t, x), (z, y), (t, y), (t, z)
         # static models (in_dim == 3) will only have the 1st, 2nd and 4th planes.
         self.plane_coefs = nn.ParameterList()
+        self.feature_coefs = [nn.Parameter(
+            torch.empty([self.select_dim, self.num_components])
+        ) for _ in range(2)]
+        self.feature_coefs = nn.ParameterList(self.feature_coefs)
+        nn.init.uniform_(self.feature_coefs[0], a=-0.1, b=0.1)
+        nn.init.uniform_(self.feature_coefs[1], a=-0.1, b=0.1)                    
+        #self.feature_coefs = nn.ParameterList()        
         #self.coo_combs = [(0,1),(0,2),(1,2), (0,1),(0,3),(1,3), (0,2),(0,3),(2,3), (1,2),(1,3),(2,3)]
         self.coo_combs = [(0,1),(0,2),(0,3), (1,2),(1,3),(2,3), (0,1),(0,2),(1,2)]        
         for coo_idx,coo_comb in enumerate(self.coo_combs):
-            num_comps = self.num_components
+            num_comps = self.select_dim
             if 3 in coo_comb:
                 num_comps = num_comps# + 1
             new_plane_coef = nn.Parameter(
                 torch.empty([num_comps] + [self.resolution[cc] for cc in coo_comb[::-1]])
             )
+            #new_feature_coef = nn.Parameter(
+            #    torch.empty([self.select_dim, self.num_components])
+            #)                
             #print(coo_comb[::-1])
             if has_time_planes and 3 in coo_comb:  # Time planes initialized to 1
                 #nn.init.ones_(new_plane_coef)
@@ -665,26 +677,29 @@ class KPlanesEncoding(Encoding):
                 #with torch.no_grad():
                 #    new_plane_coef = new_plane_coef*100
                 #nn.init.uniform_(new_plane_coef, a=init_a, b=init_b)
-                nn.init.uniform_(new_plane_coef, a=0, b=0.1)    
+                nn.init.uniform_(new_plane_coef, a=-0.1, b=0.1)    
             elif coo_idx > 5:
                 nn.init.uniform_(new_plane_coef, a=-0.1, b=0.1)
             else:
                 nn.init.uniform_(new_plane_coef, a=init_a, b=init_b)
+            #nn.init.uniform_(new_feature_coef, a=-0.1, b=0.1)
             self.plane_coefs.append(new_plane_coef)
+            #self.feature_coefs.append(new_feature_coef)
 
         bias_bool = False
-        
+
+        total_comps = self.select_dim * self.num_components
         self.output_head = nn.Sequential(
-            nn.Linear(self.num_components*2, self.num_components*4, bias=bias_bool),
-            #nn.LayerNorm(self.num_components*4),
+            nn.Linear(total_comps*2, total_comps*4, bias=bias_bool),
+            #nn.LayerNorm(total_comps*4),
             nn.ReLU(),
-            nn.Linear(self.num_components*4, self.num_components*4, bias=bias_bool),
-            #nn.LayerNorm(self.num_components*4),            
+            nn.Linear(total_comps*4, total_comps*4, bias=bias_bool),
+            #nn.LayerNorm(total_comps*4),            
             #nn.ReLU(),
-            #nn.Linear(self.num_components*4, self.num_components*4, bias=bias_bool),
-            #nn.LayerNorm(self.num_components*4),
+            #nn.Linear(total_comps*4, total_comps*4, bias=bias_bool),
+            #nn.LayerNorm(total_comps*4),
             nn.ReLU(),            
-            nn.Linear(self.num_components*4, self.num_components, bias=bias_bool))
+            nn.Linear(total_comps*4, total_comps, bias=bias_bool))
         
         #self.time_freq_conv = nn.ModuleList([
         #    nn.Sequential(
@@ -710,7 +725,7 @@ class KPlanesEncoding(Encoding):
             #    nn.Conv2d(2*num_components,num_components,3,1,padding=1))]) #,dtype=torch.complex64))])            
 
     def get_out_dim(self) -> int:
-        return self.num_components
+        return total_comps
 
     def forward(self, in_tensor: Float[Tensor, "*bs input_dim"],
                 time_mask: Bool[Tensor, "*bs input_dim"],
@@ -735,10 +750,16 @@ class KPlanesEncoding(Encoding):
             interp = F.grid_sample(
                grid, coords, align_corners=True, padding_mode="border"
             )  # [1, output_dim, 1, flattened_bs]
-            num_comps = self.num_components
+            num_comps = self.select_dim
             if 3 in coo_comb:
                 num_comps = num_comps #+ 1
             interp = interp.view(num_comps, -1).T  # [flattened_bs, output_dim]
+
+
+            #interp = torch.sigmoid(interp.unsqueeze(-1)) * self.feature_coefs[ci].unsqueeze(0)
+            #interp = torch.tanh(interp.unsqueeze(-1)) * self.feature_coefs[ci].unsqueeze(0)            
+            interp = interp.reshape(interp.shape[0],-1)
+
             #if 3 in coo_comb:
             #    interp = torch.fft.rfft(interp)
             if self.reduce == "product":
@@ -783,11 +804,8 @@ class KPlanesEncoding(Encoding):
             #yz_ty_tz = self.proc_func(outputs[3] + outputs[4][:,:self.num_components]*outputs[5][:,:self.num_components])
 
             xyz_static = outputs[0]*outputs[1]*outputs[3]
-            xyz_temporal = (outputs[2][:,:self.num_components]*
-                            #outputs[2][:,:self.num_components]*outputs[4][:,:self.num_components]*outputs[5][:,:self.num_components]*                      
-                                     outputs[4][:,:self.num_components]*
-                                     outputs[5][:,:self.num_components]*
-                                     outputs[6]*outputs[7]*outputs[8])
+            xyz_temporal = (outputs[2]*outputs[4]*outputs[5]*
+                            outputs[6]*outputs[7]*outputs[8])
             #output = outputs[0]*outputs[1]*outputs[3]*outputs[2][:,:self.num_components]*outputs[4][:,:self.num_components]*outputs[5][:,:self.num_components]
             '''
             xy_tx_ty = self.proc_func((1 - xy_gate)*outputs[0] +
@@ -940,8 +958,15 @@ class KPlanesEncoding(Encoding):
             static_mask = static_mask.reshape(-1,1)
             dynamic_mask = dynamic_mask.reshape(-1,1)            
 
+
+        
         #sig_func = torch.sigmoid
         #sig_func = torch.nn.Identity()
+        xyz_static = torch.tanh(xyz_static.unsqueeze(-1)) * (self.feature_coefs[0].unsqueeze(0))
+        xyz_temporal = torch.tanh(xyz_temporal.unsqueeze(-1)) * (self.feature_coefs[1].unsqueeze(0))
+        xyz_static = xyz_static.reshape(xyz_static.shape[0],-1)
+        xyz_temporal = xyz_temporal.reshape(xyz_temporal.shape[0],-1)
+
         #output = self.proc_func(self.output_head(torch.cat([static_mask*F.normalize(xyz_static),dynamic_mask*F.normalize(xyz_temporal),
         #output = self.proc_func(self.output_head(torch.cat([F.normalize(xyz_static),F.normalize(xyz_temporal),
         #output = self.proc_func(self.output_head(torch.cat([static_mask*xyz_static,dynamic_mask*xyz_temporal,
@@ -949,15 +974,19 @@ class KPlanesEncoding(Encoding):
                                                             #outputs[2][:,self.num_components:],
                                                             #outputs[4][:,self.num_components:],
                                                             #outputs[5][:,self.num_components:]],dim=-1)))
+
         #output = xyz_static + xyz_temporal
         #output = ((outputs[0] + tx_ty) *
         #          (outputs[1] + tx_tz) *
         #          (outputs[3] + ty_tz))
-        vol_tv = outputs
+        #vol_tv = outputs
 
         # Typing: output gets converted to a tensor after the first iteration of the loop
         assert isinstance(output, Tensor)
-        return output.reshape(*original_shape[:-1], self.num_components), vol_tv
+        return output, vol_tv
+        #print(output.shape)
+        #exit(-1)
+        #return output.reshape(*original_shape[:-1], (self.num_components * self.select_dim)), vol_tv
 
 
 class SHEncoding(Encoding):

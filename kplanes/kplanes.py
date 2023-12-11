@@ -83,6 +83,9 @@ class KPlanesModelConfig(ModelConfig):
     grid_feature_dim: int = 32
     """Dimension of feature vectors stored in grid."""
 
+    grid_select_dim: int = 32
+    """Dimension of feature vectors stored in grid."""    
+
     multiscale_res: List[int] = field(default_factory=lambda: [1, 2, 4])
     """Multiscale grid resolutions."""
 
@@ -182,7 +185,7 @@ class KPlanesModel(Model):
         # Fields
         scale = 4
         feat_dim = self.config.grid_feature_dim // 4
-        self.start_feat_dim = feat_dim
+        self.start_feat_dim = feat_dim * self.config.grid_select_dim
 
         curr_res = [res * 4 if idx < 3 else res for idx,res in enumerate(self.config.grid_base_resolution)]
         self.patch_size = self.config.patch_size
@@ -193,6 +196,7 @@ class KPlanesModel(Model):
                 num_images=self.num_train_data,
                 grid_base_resolution=curr_res,
                 grid_feature_dim=feat_dim,
+                grid_select_dim=self.config.grid_select_dim,
                 concat_across_scales=self.config.concat_features_across_scales,
                 multiscale_res=[1],
                 spatial_distortion=scene_contraction,
@@ -255,7 +259,7 @@ class KPlanesModel(Model):
         self.final_dim = self.config.patch_size
         self.decoder = ImageDecoder(input_dim=(self.final_dim // 8,self.final_dim // 8),
                                     final_dim=(self.final_dim,self.final_dim),
-                                    feature_dim=self.config.grid_feature_dim // 4,mode='upscale')
+                                    feature_dim=self.start_feat_dim,mode='upscale')
         
         self.density_fns = []
         num_prop_nets = self.config.num_proposal_iterations
@@ -460,6 +464,8 @@ class KPlanesModel(Model):
             ray_bundle.nears = new_ray_bundle_stuffs[:,7].unsqueeze(-1)
             ray_bundle.fars = new_ray_bundle_stuffs[:,8].unsqueeze(-1)
 
+
+            
             orig_shape = None
             if len(ray_bundle.shape) > 1:
                 orig_shape = ray_bundle.shape
@@ -623,7 +629,7 @@ class KPlanesModel(Model):
             vol_tvs = 0.0
             time_mask_loss = 0.0
             #time_mask_alt = image_mask_bool.unsqueeze(-1).expand(-1,10,-1)
-            num_comps = outputs_lst[0][0].shape[-1]
+            #num_comps = outputs_lst[0][0].shape[-1]
 
             #for output_idx,_outputs in enumerate(outputs_lst):
             #    time_mask_loss += self.rgb_loss((_outputs[2][:,num_comps:]).reshape(-1,10,1),time_mask_alt)
@@ -635,7 +641,7 @@ class KPlanesModel(Model):
             #field_grids = [g.plane_coefs for g in self.field.grids]
             #grid_norm = 0.0
             local_vol_tvs = 0.0
-
+            outputs_lst = []
             for odx,_outputs in enumerate(outputs_lst):
                 #continue
                 #for tdx0,tdx1,tdx2,tdx3 in [(0,2,4,6),(1,2,5,7),(3,4,5,8)]:
@@ -662,7 +668,7 @@ class KPlanesModel(Model):
             #loss_dict["camera_delts"] += (torch.abs(self.pos_diff[non_zero_idxs])*image_diff).mean()
             #loss_dict["camera_delts"] = (torch.abs(self.rot_angs*image_diff)).mean()
             #loss_dict["camera_delts"] += (torch.abs(self.pos_diff*image_diff)).mean()
-            loss_dict["local_vol_tvs"] = 1*local_vol_tvs / (3*len(outputs_lst))
+            #loss_dict["local_vol_tvs"] = 1*local_vol_tvs / (3*len(outputs_lst))
             #loss_dict["grid_norm"] = 0.01*grid_norm / (6*len(outputs_lst))
             
             #loss_dict["time_masks"] = time_mask_loss
