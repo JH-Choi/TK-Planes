@@ -445,7 +445,14 @@ class KPlanesModel(Model):
                       ray_bundle.nears,
                       ray_bundle.fars]
         ray_stuffs = torch.concat(ray_stuffs,dim=-1)
-        ray_stuffs = ray_stuffs.reshape(-1,self.patch_size,self.patch_size,ray_stuffs.shape[-1]).permute(0,3,1,2)
+        if len(ray_stuffs.shape) == 2:
+            ray_stuffs = ray_stuffs.reshape(-1,self.patch_size,self.patch_size,ray_stuffs.shape[-1]).permute(0,3,1,2)
+        else:
+            ray_stuffs = ray_stuffs.unsqueeze(0).permute(0,3,1,2)
+
+        print(ray_stuffs.shape)
+        exit(-1)
+            
         for rbidx,ray_bundle in enumerate(ray_bundles[1:]):
             ray_stuffs = self.ray_bundle_encoder[rbidx](ray_stuffs)
 
@@ -469,6 +476,7 @@ class KPlanesModel(Model):
             ray_samples = self.proposal_sampler(            
                 ray_bundle, num_samps #, density_fns=density_fns
             )
+
             field_outputs = self.fields[rbidx](ray_samples)
 
             #weights = ray_samples.get_weights(field_outputs[FieldHeadNames.DENSITY])

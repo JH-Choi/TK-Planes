@@ -427,35 +427,39 @@ class Cameras(TensorDataclass):
         # each image in camera_indices has to have the same shape since otherwise we would have error'd when
         # we checked keep_shape is valid or we aren't jagged.
         booly = False
+        coords_lst = None
         if coords is None:
+            coords_lst = []
             booly = True
             index_dim = camera_indices.shape[-1]
             index = camera_indices.reshape(-1, index_dim)[0]
-            old_height = self.height
-            self.height = self.height // ray_mult
-            old_width = self.width
-            self.width = self.width // ray_mult
-            coords = cameras.get_image_coords(index=tuple(index))  # (h, w, 2)
-            coords = coords.reshape(coords.shape[:2] + (1,) * len(camera_indices.shape[:-1]) + (2,))  # (h, w, 1..., 2)
-            coords = coords.expand(coords.shape[:2] + camera_indices.shape[:-1] + (2,))  # (h, w, num_rays, 2)
-            self.height = old_height
-            self.width = old_width
+            for curr_ray_mult in [1,2,4,8]:
+                old_height = self.height
+                self.height = self.height // curr_ray_mult
+                old_width = self.width
+                self.width = self.width // curr_ray_mult
+                coords = cameras.get_image_coords(index=tuple(index))  # (h, w, 2)
+                coords = coords.reshape(coords.shape[:2] + (1,) * len(camera_indices.shape[:-1]) + (2,))  # (h, w, 1..., 2)
+                coords = coords.expand(coords.shape[:2] + camera_indices.shape[:-1] + (2,))  # (h, w, num_rays, 2)
+                self.height = old_height
+                self.width = old_width
+                coords_lst.append(coords)
             #print("CAM COORDS: {}".format(coords.shape))
             #print("CAM HEIGH, WIDTH: {}".format((self.height,self.width)))
             #print("CAM: {}".format(cameras.shape))
             camera_opt_to_camera = (  # (h, w, num_rays, 3, 4) or None
-                camera_opt_to_camera.broadcast_to(coords.shape[:-1] + (3, 4))
+                camera_opt_to_camera.broadcast_to(coords_lst[0].shape[:-1] + (3, 4))
                 if camera_opt_to_camera is not None
                 else None
             )
             distortion_params_delta = (  # (h, w, num_rays, 6) or None
-                distortion_params_delta.broadcast_to(coords.shape[:-1] + (6,))
+                distortion_params_delta.broadcast_to(coords_lst[0].shape[:-1] + (6,))
                 if distortion_params_delta is not None
                 else None
             )
 
         # If camera indices was an int or coords was none, we need to broadcast our indices along batch dims
-        camera_indices = camera_indices.broadcast_to(coords.shape[:-1] + (len(cameras.shape),)).to(torch.long)
+        #camera_indices = camera_indices.broadcast_to(coords_lst[0].shape[:-1] + (len(cameras.shape),)).to(torch.long)
 
         # Checking our tensors have been standardized
         assert isinstance(coords, torch.Tensor) and isinstance(camera_indices, torch.Tensor)
@@ -468,14 +472,23 @@ class Cameras(TensorDataclass):
 
         #if booly:
         #    print("AFTER COORDS: {}".format(coords.shape))
-        raybundle = cameras._generate_rays_from_coords(
-            camera_indices, coords, camera_opt_to_camera, distortion_params_delta, disable_distortion=disable_distortion,ray_mult=ray_mult
-        )
-
+        raybundles = []
+        if coords_lst:
+            og_camera_indices = camera_indices
+            for curr_coords in coords_lst:
+                camera_indices = og_camera_indices.broadcast_to(curr_coords.shape[:-1] + (len(cameras.shape),)).to(torch.long)
+                raybundle = cameras._generate_rays_from_coords(
+                    camera_indices, curr_coords, camera_opt_to_camera, distortion_params_delta, disable_distortion=disable_distortion,ray_mult=ray_mult
+                )
+                raybundles.append(raybundle)
+        else:
+            camera_indices = camera_indices.broadcast_to(coords.shape[:-1] + (len(cameras.shape),)).to(torch.long)
+            raybundles = cameras._generate_rays_from_coords(
+                camera_indices, coords, camera_opt_to_camera, distortion_params_delta, disable_distortion=disable_distortion,ray_mult=ray_mult
+            )                
         # If we have mandated that we don't keep the shape, then we flatten
         if keep_shape is False:
             raybundle = raybundle.flatten()
-
 
         #print("KEEP SHAPE: {}, {}".format(keep_shape,raybundle.shape))
 
@@ -503,7 +516,7 @@ class Cameras(TensorDataclass):
         # TODO: We should have to squeeze the last dimension here if we started with zero batch dims, but never have to,
         # so there might be a rogue squeeze happening somewhere, and this may cause some unintended behaviour
         # that we haven't caught yet with tests
-        return raybundle
+        return raybundles
 
     def _generate_rays_from_coords(
         self,
