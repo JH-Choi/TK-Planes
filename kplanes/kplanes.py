@@ -450,9 +450,6 @@ class KPlanesModel(Model):
         else:
             ray_stuffs = ray_stuffs.unsqueeze(0).permute(0,3,1,2)
 
-        print(ray_stuffs.shape)
-        exit(-1)
-            
         for rbidx,ray_bundle in enumerate(ray_bundles[1:]):
             ray_stuffs = self.ray_bundle_encoder[rbidx](ray_stuffs)
 
@@ -493,7 +490,7 @@ class KPlanesModel(Model):
             if orig_shape is None:
                 rgb_image = rgb.reshape((-1,curr_dim,curr_dim,feat_dim)) #.transpose(2,0,1)
             else:
-                rgb_image = rgb.reshape(orig_shape + (feat_dim,))
+                rgb_image = rgb.reshape((1,) + orig_shape + (feat_dim,))
 
             rgb_image = rgb_image.permute(0,3,1,2)
             rgb_images.append(rgb_image)
