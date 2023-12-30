@@ -46,6 +46,9 @@ from nerfstudio.model_components.losses import MSELoss, distortion_loss, interle
 from nerfstudio.model_components.ray_samplers import (
     ProposalNetworkSampler,
     UniformLinDispPiecewiseSampler,
+    LinearDisparitySampler,
+    LogSampler,
+    SqrtSampler,
     UniformSampler,
 )
 from nerfstudio.model_components.renderers import (
@@ -74,7 +77,7 @@ class KPlanesModelConfig(ModelConfig):
     far_plane: float = 6.0
     """How far along the ray to stop sampling."""
 
-    patch_size: int = 32
+    patch_size: List[int] = field(default_factory=lambda: [32, 32])
     """How big a patch to render with tiered feature maps."""
     
     grid_base_resolution: List[int] = field(default_factory=lambda: [128, 128, 128])
@@ -83,7 +86,7 @@ class KPlanesModelConfig(ModelConfig):
     grid_feature_dim: int = 32
     """Dimension of feature vectors stored in grid."""
 
-    grid_select_dim: int = 32
+    grid_select_dim: List[int] = field(default_factory=lambda: [64, 32])
     """Dimension of feature vectors stored in grid."""    
 
     multiscale_res: List[int] = field(default_factory=lambda: [1, 2, 4])
@@ -185,7 +188,7 @@ class KPlanesModel(Model):
         # Fields
         scale = 4
         feat_dim = self.config.grid_feature_dim // 4
-        self.start_feat_dim = feat_dim * self.config.grid_select_dim
+        self.start_feat_dim = feat_dim * (self.config.grid_select_dim[0] + self.config.grid_select_dim[1])
 
         curr_res = [res * 4 if idx < 3 else res for idx,res in enumerate(self.config.grid_base_resolution)]
         self.patch_size = self.config.patch_size
@@ -234,31 +237,36 @@ class KPlanesModel(Model):
         self.cosine_idx = 0
         self.vol_tv_mult = 0.0001
         self.conv_vol_tv_mult = 0.0001
-        self.mask_layer = LimitGradLayer.apply
+        #self.mask_layer = LimitGradLayer.apply
         self.conv_switch = 500
 
         self.prev_image = None
         
-        #rot_angs = torch.nn.Parameter(torch.zeros(3,153))
+        #self.camera_pose_delts = torch.nn.Parameter(torch.empty(2,153,3))
+        #torch.nn.init.normal_(self.camera_pose_delts,0,0.001)
         #pos_diff = torch.nn.Parameter(torch.zeros(153,3))
+        #self.camera_pose_delt_limits = [1,2 * np.pi / 180]
+        #self.camera_delt_limit_layer = LimitGradLayer.apply
         #self.pos_idx = 0
         #self.camera_pose_delts = torch.nn.ParameterList([rot_angs,pos_diff])
 
-        self.ray_bundle_encoder = [torch.nn.AvgPool2d(2) for _ in range(3)]
+        self.ray_bundle_encoder_avg = [torch.nn.AvgPool2d(2) for _ in range(3)]
         
-        #self.ray_bundle_encoder = [torch.nn.Sequential(conv2x2(9,18,stride=2,padding=0),
+        #self.ray_bundle_encoder = [torch.nn.Sequential(conv3x3(9,32,stride=2,padding=1),
         #                                               torch.nn.ReLU(),
-        #                                               conv2x2(18,9,stride=1,padding=1)) for _ in range(3)]
+        #                                               conv3x3(32,32,stride=1,padding=1),
+        #                                               torch.nn.ReLU(),                                                       
+        #                                               conv3x3(32,9,stride=1,padding=1)) for _ in range(3)]
 
         #for encoder in self.ray_bundle_encoder:
         #    for m in encoder:
         #        if type(m) == torch.nn.Conv2d:
-        #            torch.nn.init.normal(m.weight.data,0.25,0.05)
+        #            torch.nn.init.normal(m.weight.data,0,0.01)
         
         #self.ray_bundle_encoder = torch.nn.ModuleList(self.ray_bundle_encoder)
         self.final_dim = self.config.patch_size
-        self.decoder = ImageDecoder(input_dim=(self.final_dim // 8,self.final_dim // 8),
-                                    final_dim=(self.final_dim,self.final_dim),
+        self.decoder = ImageDecoder(input_dim=(self.final_dim[0] // 8,self.final_dim[1] // 8),
+                                    final_dim=(self.final_dim[0],self.final_dim[1]),
                                     feature_dim=self.start_feat_dim,mode='upscale')
         
         self.density_fns = []
@@ -303,6 +311,9 @@ class KPlanesModel(Model):
             initial_sampler = UniformSampler(single_jitter=self.config.single_jitter)
 
         self.proposal_sampler = UniformSampler(single_jitter=self.config.single_jitter)
+        #self.proposal_sampler = LinearDisparitySampler(single_jitter=self.config.single_jitter)
+        #self.proposal_sampler = SqrtSampler(single_jitter=self.config.single_jitter)
+        #self.proposal_sampler = LogSampler(single_jitter=self.config.single_jitter)                
         '''
         self.proposal_sampler = ProposalNetworkSampler(
             num_nerf_samples_per_ray=self.config.num_samples,
@@ -399,9 +410,15 @@ class KPlanesModel(Model):
         #roll = torch.clip(roll,-3,3) * torch.pi / 180
         #yaw = yaw * torch.pi / 180
         #pitch = torch.clip(pitch,-75,-40) * torch.pi / 180
-        roll = torch.zeros_like(angs[0])
-        yaw = angs[1]
-        pitch = angs[2]
+        #roll = torch.zeros_like(angs[0])
+
+        orig_shape = None
+        if len(angs.shape) > 3:
+            orig_shape = angs.shape[:2]
+            angs = angs.reshape((-1,) + angs.shape[2:])
+        roll = angs[:,0,0]
+        yaw = angs[:,0,1]
+        pitch = angs[:,0,2]
         rz = torch.stack([torch.stack([torch.cos(roll), -torch.sin(roll), torch.zeros_like(roll)]),
                           torch.stack([torch.sin(roll), torch.cos(roll), torch.zeros_like(roll)]),
                           torch.stack([torch.zeros_like(roll),torch.zeros_like(roll),torch.ones_like(roll)])])
@@ -411,7 +428,6 @@ class KPlanesModel(Model):
         rx = torch.stack([torch.stack([torch.ones_like(roll), torch.zeros_like(roll), torch.zeros_like(roll)]),
                           torch.stack([torch.zeros_like(roll), torch.cos(pitch), -torch.sin(pitch)]),
                           torch.stack([torch.zeros_like(roll), torch.sin(pitch), torch.cos(pitch)])])
-        
 
         rz = rz.permute(2,0,1)
         ry = ry.permute(2,0,1)
@@ -419,6 +435,9 @@ class KPlanesModel(Model):
 
         R = torch.matmul(rz.squeeze(),torch.matmul(ry.squeeze(),rx.squeeze()))
 
+        if orig_shape:
+            R = R.reshape(orig_shape + R.shape[1:])
+        
         return R
     
     def get_outputs(self, ray_bundles): #: RayBundle):
@@ -434,12 +453,23 @@ class KPlanesModel(Model):
         #for rb in ray_bundles:
         #    print(rb.shape)
         #exit(-1)
+
+        #cam_delts = torch.tanh(self.camera_delt_limit_layer(self.camera_pose_delts))
+        #cam_delts = cam_delts[:,ray_bundles[0].camera_indices]
+        #cam_delts[0] = cam_delts[0]*self.camera_pose_delt_limits[0]
+        #cam_delts[1] = cam_delts[0]*self.camera_pose_delt_limits[1]
+        #rot_mat = self.get_rot_mat_torch(cam_delts[1])
+        #new_dirs = torch.matmul(ray_bundles[0].directions.unsqueeze(-2),rot_mat).squeeze()
+
+        #ray_bundles[0].directions = new_dirs
+        #ray_bundles[0].origins = ray_bundles[0].origins + cam_delts[0].squeeze()
+        
         weights_list = []
         ray_samples_list = []
         self.vol_tvs = []
         num_samps = self.config.num_samples*4 # 2**2 for three stages
         feat_dim = self.start_feat_dim // 4
-        curr_dim = self.final_dim // 2
+        curr_dim = [self.final_dim[0] // 2, self.final_dim[1] // 2]
         rgb_images = []
         ray_bundle = ray_bundles[0]
 
@@ -450,12 +480,14 @@ class KPlanesModel(Model):
                       ray_bundle.fars]
         ray_stuffs = torch.concat(ray_stuffs,dim=-1)
         if len(ray_stuffs.shape) == 2:
-            ray_stuffs = ray_stuffs.reshape(-1,self.patch_size,self.patch_size,ray_stuffs.shape[-1]).permute(0,3,1,2)
+            ray_stuffs = ray_stuffs.reshape(-1,self.patch_size[0],self.patch_size[1],ray_stuffs.shape[-1]).permute(0,3,1,2)
         else:
             ray_stuffs = ray_stuffs.unsqueeze(0).permute(0,3,1,2)
 
         for rbidx,ray_bundle in enumerate(ray_bundles[1:]):
-            ray_stuffs = self.ray_bundle_encoder[rbidx](ray_stuffs)
+            
+            #ray_stuffs = self.ray_bundle_encoder[rbidx](ray_stuffs) + self.ray_bundle_encoder_avg[rbidx](ray_stuffs)
+            ray_stuffs = self.ray_bundle_encoder_avg[rbidx](ray_stuffs)            
 
             new_ray_bundle_stuffs = ray_stuffs.permute(0,2,3,1).reshape(-1,ray_stuffs.shape[1])
             new_ray_bundle_stuffs[:,:3] = new_ray_bundle_stuffs[:,:3] / 2
@@ -467,8 +499,6 @@ class KPlanesModel(Model):
             ray_bundle.pixel_area = new_ray_bundle_stuffs[:,6].unsqueeze(-1)
             ray_bundle.nears = new_ray_bundle_stuffs[:,7].unsqueeze(-1)
             ray_bundle.fars = new_ray_bundle_stuffs[:,8].unsqueeze(-1)
-
-
             
             orig_shape = None
             if len(ray_bundle.shape) > 1:
@@ -491,15 +521,16 @@ class KPlanesModel(Model):
             #depth = self.renderer_depth(weights=weights, ray_samples=ray_samples)
             #accumulation = self.renderer_accumulation(weights=weights)
 
-            self.vol_tvs.append(field_outputs["vol_tvs"][0])
+            self.vol_tvs.append(field_outputs["vol_tvs"]) #[0])
+
             if orig_shape is None:
-                rgb_image = rgb.reshape((-1,curr_dim,curr_dim,feat_dim)) #.transpose(2,0,1)
+                rgb_image = rgb.reshape((-1,curr_dim[0],curr_dim[1],feat_dim)) #.transpose(2,0,1)
             else:
                 rgb_image = rgb.reshape((1,) + orig_shape + (feat_dim,))
 
             rgb_image = rgb_image.permute(0,3,1,2)
             rgb_images.append(rgb_image)
-            curr_dim = curr_dim // 2
+            curr_dim = [curr_dim[0] // 2, curr_dim[1] // 2]
             feat_dim = feat_dim * 2
             num_samps = num_samps // 2
 
@@ -549,38 +580,17 @@ class KPlanesModel(Model):
                 for g in field.grids:
                     field_grids.append(g.plane_coefs)
 
-            metrics_dict["plane_tv"] = space_tv_loss(field_grids)
+            #metrics_dict["plane_tv"] = space_tv_loss(field_grids)
             #metrics_dict["plane_tv_proposal_net"] = space_tv_loss(prop_grids)
 
-            if len(self.config.grid_base_resolution) == 4:
-                metrics_dict["l1_time_planes"] = l1_time_planes(field_grids)
+            #if len(self.config.grid_base_resolution) == 4:
+            #    metrics_dict["l1_time_planes"] = l1_time_planes(field_grids)
                 #metrics_dict["l1_time_planes_proposal_net"] = l1_time_planes(prop_grids)
-                metrics_dict["time_smoothness"] = time_smoothness(field_grids)
+            #    metrics_dict["time_smoothness"] = time_smoothness(field_grids)
                 #metrics_dict["time_smoothness_proposal_net"] = time_smoothness(prop_grids)
 
         return metrics_dict
 
-    def get_dist_loss(self, outputs):
-        weights = outputs['weights_list'][-1]
-        ray_samples = outputs['ray_samples_list'][-1]
-
-        num_samples = weights.shape[1]
-
-        num_rays = 1000
-        dist_loss = 0.0
-        for i in range(num_samples-1):
-            for j in range(num_samples-1):
-                if i != j:
-                    dist_loss += weights[:num_rays,i,0]*weights[:num_rays,j,0]*torch.abs((ray_samples.spacing_starts[:num_rays,i,0] +
-                                                                                  ray_samples.spacing_starts[:num_rays,i+1,0]) -
-                                                                                 (ray_samples.spacing_starts[:num_rays,j,0] +
-                                                                                  ray_samples.spacing_starts[:num_rays,j+1,0])) / 2
-
-        for i in range(0,num_samples-1):
-            dist_loss += (weights[:num_rays,i,0]**2)*(ray_samples.spacing_starts[:num_rays,i+1,0] - ray_samples.spacing_starts[:num_rays,i,0]) / 3
-
-        return dist_loss
-                    
     def get_loss_dict(self, outputs, batch, metrics_dict=None):
         image = batch["full_image"].to(self.device)
 
@@ -645,21 +655,18 @@ class KPlanesModel(Model):
             #field_grids = [g.plane_coefs for g in self.field.grids]
             #grid_norm = 0.0
             local_vol_tvs = 0.0
-            outputs_lst = []
-            for odx,_outputs in enumerate(outputs_lst):
+            #outputs_lst = []
+            #for odx,_outputs in enumerate(outputs_lst):
                 #continue
-                #for tdx0,tdx1,tdx2,tdx3 in [(0,2,4,6),(1,2,5,7),(3,4,5,8)]:
-                #    spatial = _outputs[tdx0].reshape(-1,48,32)
-                #    temporal = (_outputs[tdx3]*_outputs[tdx1][:,:num_comps]*_outputs[tdx2][:,:num_comps]).reshape(-1,48,32).transpose(-1,-2)
-                #    local_vol_tvs += torch.abs(torch.matmul(spatial,temporal)).mean()
-                #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[0],_outputs[2][:,:num_comps]*_outputs[4][:,:num_comps]*_outputs[6])).mean()
-                #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[1],_outputs[2][:,:num_comps]*_outputs[5][:,:num_comps]*_outputs[7])).mean()
-                #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[3],_outputs[4][:,:num_comps]*_outputs[5][:,:num_comps]*_outputs[8])).mean()
-                local_vol_tvs += torch.abs(self.similarity_loss(_outputs[0],_outputs[6])).mean()
-                local_vol_tvs += torch.abs(self.similarity_loss(_outputs[1],_outputs[7])).mean()
-                local_vol_tvs += torch.abs(self.similarity_loss(_outputs[3],_outputs[8])).mean()
-
-                
+                #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[0],_outputs[6])).mean()
+                #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[1],_outputs[7])).mean()
+                #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[3],_outputs[8])).mean()
+            #    o0 = torch.nn.functional.normalize(_outputs[0][0],p=1,dim=1)
+            #    o1 = torch.nn.functional.normalize(_outputs[0][1],p=1,dim=1)                
+            #    tmp = torch.abs(torch.matmul(o0,o1.permute(1,0)))
+                #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[0][0],_outputs[0][1])).mean()
+            #    local_vol_tvs += torch.sum(tmp)
+            
             #for grid_idx,grids in enumerate(field_grids):
             #    continue
             #    grid_norm += torch.abs(1 - torch.norm(grids[0],2,0)).mean()
@@ -672,7 +679,7 @@ class KPlanesModel(Model):
             #loss_dict["camera_delts"] += (torch.abs(self.pos_diff[non_zero_idxs])*image_diff).mean()
             #loss_dict["camera_delts"] = (torch.abs(self.rot_angs*image_diff)).mean()
             #loss_dict["camera_delts"] += (torch.abs(self.pos_diff*image_diff)).mean()
-            #loss_dict["local_vol_tvs"] = 1*local_vol_tvs / (3*len(outputs_lst))
+            #loss_dict["local_vol_tvs"] = 0.000001*local_vol_tvs / len(outputs_lst)
             #loss_dict["grid_norm"] = 0.01*grid_norm / (6*len(outputs_lst))
             
             #loss_dict["time_masks"] = time_mask_loss
@@ -778,7 +785,8 @@ def l1_time_planes(multi_res_grids: List[torch.Tensor]) -> float:
     Returns:
          L1 distance from the multiplicative identity (1)
     """
-    time_planes = [2, 4, 5]  # These are the spatiotemporal planes
+    #time_planes = [2, 4, 5]  # These are the spatiotemporal planes
+    time_planes = [0, 1, 2, 3, 4, 5, 6, 7, 8]  # zero for all planes, try to limit selection of features used
     #time_planes = [4, 5, 7, 8, 10, 11]  # These are the spatiotemporal planes    
     total = 0.0
     num_comps = multi_res_grids[0][0].shape[0]
@@ -786,7 +794,8 @@ def l1_time_planes(multi_res_grids: List[torch.Tensor]) -> float:
     for grids in multi_res_grids:
         for grid_id in time_planes:
             #total += torch.abs(1 - grids[grid_id]).mean()
-            total += torch.abs(grids[grid_id][:num_comps]).mean()            
+            #total += torch.abs(grids[grid_id][:num_comps]).mean()
+            total += grids[grid_id].mean() # drive it as low as possible to reduce selection of feature vectors
             num_planes += 1
 
     return total / num_planes

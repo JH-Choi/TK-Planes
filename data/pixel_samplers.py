@@ -123,7 +123,7 @@ class PixelSampler:
             dynamic_indices = self.sample_method(dynamic_num_rays_per_batch, num_images, image_height, image_width, mask=time_mask.unsqueeze(-1),device=device)
             indices = torch.cat([static_indices,dynamic_indices],dim=0)
         else:
-            indices,dw,dh,select,xy_dim = self.sample_method(num_rays_per_batch, num_images, image_height, image_width, device=device, all_pixels=True)
+            indices,dw,dh,select,xy_dim,imgidx = self.sample_method(num_rays_per_batch, num_images, image_height, image_width, device=device, all_pixels=True)
 
         #c, y, x = (i.flatten() for i in torch.split(indices, 1, dim=-1))
         #c, y, x = c.cpu(), y.cpu(), x.cpu()
@@ -143,7 +143,8 @@ class PixelSampler:
         #assert batch["image_idx"].shape[0] == 1
         # Needed to correct the random indices to their actual camera idx locations.
 
-        #indices[:, 0] = batch["image_idx"][c]
+        for index in indices:
+            index[:, 0] = imgidx
         
         collated_batch["indices"] = indices  # with the abs camera indices
         
@@ -151,7 +152,7 @@ class PixelSampler:
             collated_batch["full_image"] = batch["image"][select]
             image_arr = []
             for img_idx in range(dh.shape[0]):
-                image_arr.append(collated_batch["full_image"][img_idx,dh[img_idx]:dh[img_idx]+xy_dim,dw[img_idx]:dw[img_idx]+xy_dim].unsqueeze(0))
+                image_arr.append(collated_batch["full_image"][img_idx,dh[img_idx]:dh[img_idx]+xy_dim[0],dw[img_idx]:dw[img_idx]+xy_dim[1]].unsqueeze(0))
             collated_batch["full_image"] = torch.concat(image_arr,dim=0)
             #print(collated_batch["full_image"].shape)
             m = collated_batch["full_image"]
@@ -381,36 +382,60 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
         self.num_tiers = kwargs["num_tiers"]
         self.feature_patch_size = kwargs["feature_patch_size"]
 
-        self.select_idxs = [i for i in range(153)]
-        random.shuffle(self.select_idxs)
+        self.select_idxs = [] #[i for i in range(153)]
+        top_lst = []
+        for i in range(153):
+            temp_lst = []
+            for j in range(8):
+                temp_lst.append(i)
+            top_lst.append(temp_lst)
+        random.shuffle(top_lst)
+        for lst in top_lst:
+            self.select_idxs = self.select_idxs + lst
+        #random.shuffle(self.select_idxs)
         #self.num_imgs = kwargs["num_imgs"]
-        num_rays = (num_rays_per_batch // (self.patch_size**2)) * (self.patch_size**2)
+        num_rays = (num_rays_per_batch // (self.patch_size[0]*self.patch_size[1])) * (self.patch_size[0]*self.patch_size[1])
         self.keep_full_image = keep_full_image
         self.indices = []
         self.num_to_select = 1
         dh_lst = [[] for _ in range(self.num_to_select)]
         for idx in range(self.num_to_select):
-            dh_start = random.randint(0,self.patch_size - 1)
-            for dh_idx in range((720 // self.patch_size) - 1):
-                dh_lst[idx].append(dh_start + dh_idx*self.patch_size)
+            dh_start = 0 #random.randint(0,1)*(self.patch_size[0] // 2) #self.patch_size[0] - 1)
+            #for dh_idx in range((720 // self.patch_size) - 1):
+            #    dh_lst[idx].append(dh_start + dh_idx*self.patch_size)                
+            while dh_start + self.patch_size[0] < 720:
+                dh_lst[idx].append(dh_start)
+                dh_start += self.patch_size[0]
             random.shuffle(dh_lst[idx])
         dw_lst = [[] for _ in range(self.num_to_select)]
         for idx in range(self.num_to_select):
-            dw_start = random.randint(0,self.patch_size - 1)
-            for dw_idx in range((1280 // self.patch_size) - 1):
-                dw_lst[idx].append(dw_start + dw_idx*self.patch_size)
+            dw_start = 0 #random.randint(0,1)*(self.patch_size[1] // 2) #self.patch_size[1] - 1)
+            #for dw_idx in range((1280 // self.patch_size) - 1):
+            #    dw_lst[idx].append(dw_start + dw_idx*self.patch_size)
+            while dw_start + self.patch_size[1] < 1280:
+                dw_lst[idx].append(dw_start)
+                dw_start += self.patch_size[1]
             random.shuffle(dw_lst[idx])
+        self.dw_len = len(dw_lst[0])
+        self.dh_len = len(dh_lst[0])
         self.dw_lst = torch.tensor(dw_lst)
         self.dh_lst = torch.tensor(dh_lst)
-
-        num_images = 153
+        self.dw_lst = self.dw_lst.repeat([1,self.dh_len])
+        self.dh_lst = self.dh_lst.repeat_interleave(self.dw_len,dim=1)
+        self.reorder = [i for i in range(self.dw_lst.shape[1])]
+        random.shuffle(self.reorder)
+        self.dw_lst = self.dw_lst[:,self.reorder]
+        self.dh_lst = self.dh_lst[:,self.reorder]                    
+        
+        num_images = 1
         curr_dim = self.patch_size# // 2
         #self.init_dim = curr_dim
         for idx in range(4):
-            batch_size = (curr_dim**2)*num_images
-            curr_indices = super().sample_method(batch_size, num_images, curr_dim, curr_dim, mask=None, all_pixels=True) #device="cuda:0",all_pixels=True)
+            batch_size = (curr_dim[0]*curr_dim[1])*num_images
+            curr_indices = super().sample_method(batch_size, num_images, curr_dim[0], curr_dim[1], mask=None, all_pixels=True) #device="cuda:0",all_pixels=True)
             self.indices.append(curr_indices)
-            curr_dim = curr_dim // 2
+            curr_dim = [curr_dim[0] // 2, curr_dim[1] // 2]
+
         #select = torch.randn(153) > 1.5
         #select = select.repeat_interleave(curr_dim**2)
         #print(indices1.shape)
@@ -446,8 +471,17 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
             #select = torch.randn(153) > 1.5
 
             if len(self.select_idxs) < self.num_to_select:
-                self.select_idxs = [i for i in range(153)]
-                random.shuffle(self.select_idxs)
+                self.select_idxs = [] #i for i in range(153)]
+                top_lst = []
+                for i in range(153):
+                    temp_lst = []
+                    for j in range(5):
+                        temp_lst.append(i)
+                    top_lst.append(temp_lst)
+                random.shuffle(top_lst)
+                for lst in top_lst:
+                    self.select_idxs = self.select_idxs + lst                
+                #random.shuffle(self.select_idxs)
 
             curr_select_idxs = self.select_idxs[:self.num_to_select]
             self.select_idxs = self.select_idxs[self.num_to_select:]
@@ -455,26 +489,39 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
             select[curr_select_idxs] = True
             curr_dim = self.patch_size #self.init_dim * 2
             indices = []
-            #dw = random.randint(0,image_width - curr_dim - 1)
-            #dh = random.randint(0,image_height - curr_dim - 1)
-            #dw = (torch.rand(self.num_to_select,device=self.indices[0].device) * (image_width - curr_dim - 1)).to(int)
-            #dh = (torch.rand(self.num_to_select,device=self.indices[0].device) * (image_height - curr_dim - 1)).to(int)
-            if self.dw_lst.shape[1] == 0:
+            
+            if self.dw_lst.shape[1] == 0 or self.dh_lst.shape[1] == 0:
                 dw_lst = [[] for _ in range(self.num_to_select)]
                 for idx in range(self.num_to_select):
-                    dw_start = random.randint(0,self.patch_size - 1)
-                    for dw_idx in range((1280 // self.patch_size) - 1):
-                        dw_lst[idx].append(dw_start + dw_idx*self.patch_size)
+                    dw_start = random.randint(0,1) * random.randint(self.patch_size[1] // 4, self.patch_size[1] // 2) #self.patch_size[1] - 1)
+                    #for dw_idx in range((1280 // self.patch_size) - 1):
+                    #    dw_lst[idx].append(dw_start + dw_idx*self.patch_size)
+                    while dw_start + self.patch_size[1] < 1280:
+                        dw_lst[idx].append(dw_start)
+                        dw_start += self.patch_size[1]                        
                     random.shuffle(dw_lst[idx])
+                self.dw_len = len(dw_lst[0])
                 self.dw_lst = torch.tensor(dw_lst)
-            if self.dh_lst.shape[1] == 0:
+
                 dh_lst = [[] for _ in range(self.num_to_select)]
                 for idx in range(self.num_to_select):
-                    dh_start = random.randint(0,self.patch_size - 1)
-                    for dh_idx in range((720 // self.patch_size) - 1):
-                        dh_lst[idx].append(dh_start + dh_idx*self.patch_size)
+                    dh_start = random.randint(0,1) * random.randint(self.patch_size[0] // 4, self.patch_size[0] // 2) #self.patch_size[0] - 1)
+                    #for dh_idx in range((720 // self.patch_size) - 1):
+                    #    dh_lst[idx].append(dh_start + dh_idx*self.patch_size)
+                    while dh_start + self.patch_size[0] < 720:
+                        dh_lst[idx].append(dh_start)
+                        dh_start += self.patch_size[0]                        
                     random.shuffle(dh_lst[idx])
+                    
+                self.dh_len = len(dh_lst[0])
                 self.dh_lst = torch.tensor(dh_lst)
+                self.dw_lst = self.dw_lst.repeat([1,self.dh_len])                
+                self.dh_lst = self.dh_lst.repeat_interleave(self.dw_len,dim=1)
+                self.reorder = [i for i in range(self.dw_lst.shape[1])]                
+                random.shuffle(self.reorder)
+                self.dw_lst = self.dw_lst[:,self.reorder]
+                self.dh_lst = self.dh_lst[:,self.reorder]
+
             dw = self.dw_lst[:,0]
             dh = self.dh_lst[:,0]
 
@@ -484,17 +531,19 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
             dw_og = dw #list(dw.numpy())
             dh_og = dh #list(dh.numpy())
             for index in self.indices:
-                curr_dw = dw.repeat_interleave(curr_dim**2)
-                curr_dh = dh.repeat_interleave(curr_dim**2)
+                curr_dw = dw.repeat_interleave(curr_dim[0]*curr_dim[1])
+                curr_dh = dh.repeat_interleave(curr_dim[0]*curr_dim[1])
 
-                curr_select = select.repeat_interleave(curr_dim**2)
-                curr_index = index[curr_select]
+                #curr_select = select.repeat_interleave(curr_dim**2)
+                
+                curr_index = index.clone()#[curr_select]
+
                 curr_index[:,1] += curr_dh
                 curr_index[:,2] += curr_dw
                 #divvy = math.sqrt(curr_index.shape[0] / self.num_to_select)
                 indices.append(curr_index)
-                curr_dim = curr_dim // 2
+                curr_dim = [curr_dim[0] // 2, curr_dim[1] // 2]
                 dw = torch.ceil(dw / 2).to(int)
                 dh = torch.ceil(dh / 2).to(int)
 
-        return indices,dw_og,dh_og,select,self.patch_size #self.init_dim*2
+        return indices,dw_og,dh_og,select,self.patch_size, curr_select_idxs[0] #self.init_dim*2

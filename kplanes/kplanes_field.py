@@ -104,7 +104,7 @@ class KPlanesField(Field):
         concat_across_scales: bool = True,  # TODO: Maybe this should be removed
         grid_base_resolution: Sequence[int] = (128, 128, 128),
         grid_feature_dim: int = 32,
-        grid_select_dim: int = 32,            
+            grid_select_dim: List[int] = [64,32],
         multiscale_res: Sequence[int] = (1, 2, 4),
         spatial_distortion: Optional[SpatialDistortion] = None,
         appearance_embedding_dim: int = 0,
@@ -117,8 +117,8 @@ class KPlanesField(Field):
 
         self.register_buffer("aabb", aabb)
         self.num_images = num_images
-        self.geo_feat_dim = (grid_feature_dim * grid_select_dim // 4) #- 1 #geo_feat_dim
         self.grid_select_dim = grid_select_dim
+        self.geo_feat_dim = (grid_feature_dim * (self.grid_select_dim[0] + self.grid_select_dim[1]) // 4) #- 1 #geo_feat_dim
         self.grid_base_resolution = list(grid_base_resolution)
         self.concat_across_scales = concat_across_scales
         self.spatial_distortion = spatial_distortion
@@ -134,8 +134,8 @@ class KPlanesField(Field):
             resolution = [r * res for r in self.grid_base_resolution[:3]] + self.grid_base_resolution[3:]
             self.grids.append(KPlanesEncoding(resolution, grid_feature_dim, grid_select_dim))
         self.feature_dim = (
-            grid_feature_dim * grid_select_dim * len(multiscale_res) if self.concat_across_scales
-            else grid_feature_dim * grid_select_dim
+            grid_feature_dim * (self.grid_select_dim[0] + self.grid_select_dim[1]) * len(multiscale_res) if self.concat_across_scales
+            else grid_feature_dim * (self.grid_select_dim[0] + self.grid_select_dim[1])
         )
 
         # Init appearance code-related parameters
@@ -176,6 +176,7 @@ class KPlanesField(Field):
                 },
             )
         else:
+            #print('SIGMA: {}, {}'.format(self.feature_dim, self.geo_feat_dim * 2))
             self.sigma_net = tcnn.Network(
                 n_input_dims=self.feature_dim,
                 n_output_dims=self.geo_feat_dim * 2, #+ 1,
@@ -183,7 +184,7 @@ class KPlanesField(Field):
                     "otype": "CutlassMLP", #"FullyFusedMLP",
                     "activation": "ReLU",
                     "output_activation": "None",
-                    "n_neurons": self.geo_feat_dim * 2 * 4, #64
+                    "n_neurons": self.geo_feat_dim * 2 * 2, #64
                     "n_hidden_layers": 1, #1
                 },
             )
@@ -191,21 +192,22 @@ class KPlanesField(Field):
                 n_input_dims=3,
                 encoding_config={
                     "otype": "SphericalHarmonics",
-                    "degree": 4, #4,
+                    "degree": 6, #4,
                 },
             )
             in_dim_color = (
                 self.direction_encoding.n_output_dims + self.geo_feat_dim + self.appearance_embedding_dim
             )
-            
+            #print('COLOR: {}, {}, {}'.format(self.direction_encoding.n_output_dims,in_dim_color, self.geo_feat_dim))
             self.color_net = tcnn.Network(
                 n_input_dims=in_dim_color,
                 n_output_dims=self.geo_feat_dim, #3,
                 network_config={
                     "otype": "CutlassMLP", #"FullyFusedMLP",
                     "activation": "ReLU",
-                    "output_activation": "None", #"Sigmoid",
-                    "n_neurons": in_dim_color * 4, #64
+                    #"output_activation": "ReLU", #"None", #"Sigmoid",
+                    "output_activation": "None", #"Sigmoid",                    
+                    "n_neurons": in_dim_color * 2, #64
                     "n_hidden_layers": 2, #2
                 },
             )
@@ -253,6 +255,7 @@ class KPlanesField(Field):
         )
 
         self.vol_tvs = vol_tvs
+
         if len(features) < 1:
             features = torch.zeros((0, 1), device=features.device, requires_grad=True)
         if self.linear_decoder:

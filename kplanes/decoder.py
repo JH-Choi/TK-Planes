@@ -10,7 +10,8 @@ def conv3x3(in_channels, out_channels, stride=1,
         kernel_size=3,
         stride=stride,
         padding=padding,
-        padding_mode='replicate',
+        #padding_mode='replicate',
+        padding_mode='zeros',        
         bias=bias,
         groups=groups)
 
@@ -78,10 +79,14 @@ class UpConv(nn.Module):
         #self.curr_dim = (self.out_channels,curr_dim,curr_dim)
 
         if not first_layer:
-            self.preprocess = nn.Sequential(conv3x3(self.in_channels, 2*self.in_channels),self.relu,
-                                            conv3x3(2*self.in_channels, self.in_channels // 2), self.relu)
-            self.in_channels = self.in_channels // 2
-            self.norm1 = nn.InstanceNorm2d(self.in_channels,affine=True)                    
+            self.preprocess_static = nn.Sequential(conv3x3(self.in_channels // 4, 4*self.in_channels // 4),self.relu,
+                                            conv3x3(4*self.in_channels // 4, self.in_channels // 4), self.relu)
+            self.preprocess_dynamic = nn.Sequential(conv3x3(self.in_channels // 4, 4*self.in_channels // 4),self.relu,
+                                            conv3x3(4*self.in_channels // 4, self.in_channels // 4), self.relu)            
+            #self.in_channels = self.in_channels // 2
+            #self.norm1 = nn.InstanceNorm2d(self.in_channels,affine=True)
+            self.norm1 = nn.Identity()            
+            #self.norm1 = nn.Identity()            
         else:
             self.preprocess = nn.Identity()
             self.norm1 = nn.Identity()
@@ -94,7 +99,8 @@ class UpConv(nn.Module):
         #self.norm1 = nn.LayerNorm([self.in_channels,curr_dim,curr_dim],elementwise_affine=True)
         #self.norm1 = torch.nn.Identity()
         #curr_dim *= 2
-        self.norm2 = nn.InstanceNorm2d(self.in_channels,affine=True)        
+        self.norm2 = nn.InstanceNorm2d(self.in_channels,affine=True)
+        #self.norm2 = nn.Identity()
         self.conv2 = conv3x3(self.in_channels, 2*self.in_channels)
         #self.norm2 = nn.Identity()
         #self.norm2 = nn.InstanceNorm2d(self.out_channels,affine=True)
@@ -102,7 +108,8 @@ class UpConv(nn.Module):
         #self.conv3 = torch.nn.utils.spectral_norm(conv5x5(self.out_channels, self.out_channels))
         self.norm3 = nn.InstanceNorm2d(2*self.in_channels,affine=True)        
         self.conv3 = conv3x3(2*self.in_channels, 2*self.in_channels)
-        self.norm4 = nn.InstanceNorm2d(2*self.in_channels,affine=True)        
+        self.norm4 = nn.InstanceNorm2d(2*self.in_channels,affine=True)
+        #self.norm4 = nn.Identity()        
         self.conv4 = conv3x3(2*self.in_channels, self.out_channels)        
         #self.norm3 = nn.Identity()
         #self.norm3 = nn.InstanceNorm2d(self.out_channels,affine=True)
@@ -110,21 +117,25 @@ class UpConv(nn.Module):
         #self.drop = nn.Dropout(0.3)
 
         #self.skippy = nn.Sequential(nn.InstanceNorm2d(self.in_channels),upconv2x2(self.in_channels,self.out_channels,mode='upsample'))
-        #self.skippy = nn.Sequential(conv1x1(self.in_channels,self.out_channels))
+        self.skippy = nn.Sequential(conv1x1(self.in_channels,self.out_channels))
         #self.skippy1 = nn.Sequential(upconv2x2(self.in_channels,2*self.in_channels,mode='upsample'))        
         #self.skippy2 = nn.Sequential(conv1x1(2*self.in_channels,self.out_channels))        
         if final_layer:
             self.conv_final = nn.Sequential(#nn.InstanceNorm2d(self.out_channels),
-                conv3x3(self.out_channels, self.out_channels // 2),
-                #nn.InstanceNorm2d(self.out_channels // 2),
-                nn.LeakyReLU(0.02),
-                #nn.InstanceNorm2d(self.out_channels // 2),
-                conv3x3(self.out_channels // 2, self.out_channels // 4),
-                nn.LeakyReLU(0.02),
-                conv1x1(self.out_channels // 4, 3),
-                #nn.InstanceNorm2d(3),
-                #nn.Tanh())
-                nn.Sigmoid()
+                                            conv3x3(self.out_channels, self.out_channels // 2),
+                                            #nn.InstanceNorm2d(self.out_channels // 2),
+                                            nn.LeakyReLU(0.02),
+                                            #nn.InstanceNorm2d(self.out_channels // 2),
+                                            conv3x3(self.out_channels // 2, self.out_channels // 4),
+                                            nn.LeakyReLU(0.02),
+                                            #nn.InstanceNorm2d(self.out_channels // 4),                                            
+                                            #conv3x3(self.out_channels // 4, self.out_channels // 8),
+                                            #nn.LeakyReLU(0.02),
+                                            #nn.InstanceNorm2d(self.out_channels // 8),                                            
+                                            conv1x1(self.out_channels // 4, 3),
+                                            #nn.InstanceNorm2d(3),
+                                            #nn.Tanh())
+                                            nn.Sigmoid()
             )
     def forward(self, x):
         """ Forward pass
@@ -134,10 +145,16 @@ class UpConv(nn.Module):
         """
 
         #skip_x1 = self.skippy1(x)
-        x = self.preprocess(x)
+        x1 = x[:,:x.shape[1] // 2]
+        x2 = x[:,x.shape[1] // 2:]
+        x2_s = x2[:,:x2.shape[1] // 2]
+        x2_d = x2[:,x2.shape[1] // 2:]        
+        x2_s = self.preprocess_static(x2_s)
+        x2_d = self.preprocess_dynamic(x2_d)        
+        x = torch.concat([x1,x2_s,x2_d],dim=1)
         x = self.relu(self.conv1(self.norm1(x)))
+        skip_x = self.skippy(x)        
         x = self.norm2(x)
-        #skip_x = self.skippy(x)
         x = self.relu(self.conv2(x))
         #x = x + skip_x1
 
@@ -150,7 +167,7 @@ class UpConv(nn.Module):
         #x = self.relu(self.norm3(self.conv3(x)))
                 
         #x = x + skip_x2
-        #x = x + skip_x
+        x = x + skip_x
         
         if self.final_layer:
             x = self.conv_final(x)
@@ -164,7 +181,6 @@ class ImageDecoder(nn.Module):
         self.input_dim = input_dim
         self.final_dim = final_dim
         self.feature_dim = feature_dim
-
         #self.norm0 = nn.InstanceNorm2d(feature_dim)
 
         done_first_loop = False
@@ -185,7 +201,6 @@ class ImageDecoder(nn.Module):
         self.layers = nn.ModuleList(self.layers)
 
     def forward(self,x):
-
         #x = self.norm0(x)
         x_lst = x
         x = x_lst[-1]

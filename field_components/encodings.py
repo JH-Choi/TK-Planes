@@ -18,7 +18,7 @@ Encoding functions
 
 import itertools
 from abc import abstractmethod
-from typing import Literal, Optional, Sequence
+from typing import Literal, Optional, Sequence, List
 
 import numpy as np
 import cv2
@@ -621,7 +621,7 @@ class KPlanesEncoding(Encoding):
         self,
         resolution: Sequence[int] = (128, 128, 128),
         num_components: int = 64,
-            select_dim: int = 32,
+            select_dim: List[int] = [64,32],
         init_a: float = 0.1,
         init_b: float = 0.5,
         reduce: Literal["sum", "product"] = "product",
@@ -651,19 +651,23 @@ class KPlanesEncoding(Encoding):
         # (y, x), (z, x), (t, x), (z, y), (t, y), (t, z)
         # static models (in_dim == 3) will only have the 1st, 2nd and 4th planes.
         self.plane_coefs = nn.ParameterList()
-        self.feature_coefs = [nn.Parameter(
-            torch.empty([self.select_dim, self.num_components])
-        ) for _ in range(2)]
+        self.feature_coefs = []
+        self.feature_coefs.append(nn.Parameter(torch.empty([self.select_dim[0], self.num_components])))
+        self.feature_coefs.append(nn.Parameter(torch.empty([self.select_dim[1], self.num_components])))        
         self.feature_coefs = nn.ParameterList(self.feature_coefs)
-        nn.init.uniform_(self.feature_coefs[0], a=-0.1, b=0.1)
-        nn.init.uniform_(self.feature_coefs[1], a=-0.1, b=0.1)                    
+        nn.init.normal_(self.feature_coefs[0], 0, 0.01)
+        nn.init.normal_(self.feature_coefs[1], 0, 0.01)
+        self.feature_softmax_layer = nn.Softmax(dim=1)
         #self.feature_coefs = nn.ParameterList()        
         #self.coo_combs = [(0,1),(0,2),(1,2), (0,1),(0,3),(1,3), (0,2),(0,3),(2,3), (1,2),(1,3),(2,3)]
         self.coo_combs = [(0,1),(0,2),(0,3), (1,2),(1,3),(2,3), (0,1),(0,2),(1,2)]        
         for coo_idx,coo_comb in enumerate(self.coo_combs):
-            num_comps = self.select_dim
-            if 3 in coo_comb:
-                num_comps = num_comps# + 1
+
+            if 3 in coo_comb or coo_idx >= 6:
+                num_comps = self.select_dim[1]                
+            else:
+                num_comps = self.select_dim[0]
+                
             new_plane_coef = nn.Parameter(
                 torch.empty([num_comps] + [self.resolution[cc] for cc in coo_comb[::-1]])
             )
@@ -678,8 +682,8 @@ class KPlanesEncoding(Encoding):
                 #    new_plane_coef = new_plane_coef*100
                 #nn.init.uniform_(new_plane_coef, a=init_a, b=init_b)
                 nn.init.uniform_(new_plane_coef, a=-0.1, b=0.1)    
-            elif coo_idx > 5:
-                nn.init.uniform_(new_plane_coef, a=-0.1, b=0.1)
+            #elif coo_idx > 5:
+            #    nn.init.uniform_(new_plane_coef, a=-0.1, b=0.1)
             else:
                 nn.init.uniform_(new_plane_coef, a=init_a, b=init_b)
             #nn.init.uniform_(new_feature_coef, a=-0.1, b=0.1)
@@ -688,41 +692,23 @@ class KPlanesEncoding(Encoding):
 
         bias_bool = False
 
-        total_comps = self.select_dim * self.num_components
+        total_comps = (self.select_dim[0] + self.select_dim[1])* self.num_components
+        out_comps = total_comps
+
+        self.output_head = nn.Identity()
+        '''
         self.output_head = nn.Sequential(
-            nn.Linear(total_comps*2, total_comps*4, bias=bias_bool),
+            nn.Linear(total_comps, total_comps*2, bias=bias_bool),
             #nn.LayerNorm(total_comps*4),
-            nn.ReLU(),
-            nn.Linear(total_comps*4, total_comps*4, bias=bias_bool),
+            #nn.ReLU(),
+            #nn.Linear(total_comps*2, total_comps*2, bias=bias_bool),
             #nn.LayerNorm(total_comps*4),            
             #nn.ReLU(),
             #nn.Linear(total_comps*4, total_comps*4, bias=bias_bool),
             #nn.LayerNorm(total_comps*4),
             nn.ReLU(),            
-            nn.Linear(total_comps*4, total_comps, bias=bias_bool))
-        
-        #self.time_freq_conv = nn.ModuleList([
-        #    nn.Sequential(
-        #        nn.Conv2d(num_components,2*num_components,3,1,padding=1,bias=False,dtype=torch.complex64),
-                #ComplexAct(nn.functional.relu),
-                #nn.InstanceNorm2d(2*num_components),
-                #nn.ReLU(),
-        #        ComplexAct(nn.functional.relu),                
-        #        nn.Conv2d(2*num_components,2*num_components,3,1,padding=1,bias=False,dtype=torch.complex64),
-                #nn.InstanceNorm2d(2*num_components),
-        #        ComplexAct(nn.functional.relu),
-                #nn.ReLU(),
-        #        nn.Conv2d(2*num_components,num_components,3,1,padding=1,bias=False,dtype=torch.complex64))])
-            #nn.Sequential(
-            #    nn.Conv2d(num_components,2*num_components,3,1,padding=1), #,dtype=torch.complex64),
-                #ComplexAct(nn.functional.relu),
-            #    nn.ReLU(),
-            #    nn.Conv2d(2*num_components,num_components,3,1,padding=1)), #,dtype=torch.complex64)),
-            #nn.Sequential(
-            #    nn.Conv2d(num_components,2*num_components,3,1,padding=1), #,dtype=torch.complex64),
-                #ComplexAct(nn.functional.relu),
-            #    nn.ReLU(),
-            #    nn.Conv2d(2*num_components,num_components,3,1,padding=1))]) #,dtype=torch.complex64))])            
+            nn.Linear(total_comps*2, out_comps, bias=bias_bool))
+        '''
 
     def get_out_dim(self) -> int:
         return total_comps
@@ -750,9 +736,12 @@ class KPlanesEncoding(Encoding):
             interp = F.grid_sample(
                grid, coords, align_corners=True, padding_mode="border"
             )  # [1, output_dim, 1, flattened_bs]
-            num_comps = self.select_dim
-            if 3 in coo_comb:
-                num_comps = num_comps #+ 1
+
+            if 3 in coo_comb or ci >= 6:
+                num_comps = self.select_dim[1]                
+            else:
+                num_comps = self.select_dim[0]
+                
             interp = interp.view(num_comps, -1).T  # [flattened_bs, output_dim]
 
 
@@ -962,8 +951,15 @@ class KPlanesEncoding(Encoding):
         
         #sig_func = torch.sigmoid
         #sig_func = torch.nn.Identity()
-        xyz_static = torch.tanh(xyz_static.unsqueeze(-1)) * (self.feature_coefs[0].unsqueeze(0))
-        xyz_temporal = torch.tanh(xyz_temporal.unsqueeze(-1)) * (self.feature_coefs[1].unsqueeze(0))
+        #xyz_static = self.feature_softmax_layer(xyz_static)
+        #xyz_temporal = self.feature_softmax_layer(xyz_temporal)        
+
+        xyz_static = torch.sigmoid(xyz_static)
+        xyz_temporal = torch.sigmoid(xyz_temporal)
+        #xyz_static = torch.tanh(xyz_static)
+        #xyz_temporal = torch.tanh(xyz_temporal)
+        xyz_static = (xyz_static.unsqueeze(-1)) * (self.feature_coefs[0].unsqueeze(0))
+        xyz_temporal = (xyz_temporal.unsqueeze(-1)) * (self.feature_coefs[1].unsqueeze(0))        
         xyz_static = xyz_static.reshape(xyz_static.shape[0],-1)
         xyz_temporal = xyz_temporal.reshape(xyz_temporal.shape[0],-1)
 
@@ -971,18 +967,21 @@ class KPlanesEncoding(Encoding):
         #output = self.proc_func(self.output_head(torch.cat([F.normalize(xyz_static),F.normalize(xyz_temporal),
         #output = self.proc_func(self.output_head(torch.cat([static_mask*xyz_static,dynamic_mask*xyz_temporal,
         output = self.proc_func(self.output_head(torch.cat([xyz_static,xyz_temporal],dim=-1)))
+        #output = self.proc_func(torch.cat([xyz_static,xyz_temporal],dim=-1))
                                                             #outputs[2][:,self.num_components:],
                                                             #outputs[4][:,self.num_components:],
                                                             #outputs[5][:,self.num_components:]],dim=-1)))
-
+                                                            
         #output = xyz_static + xyz_temporal
         #output = ((outputs[0] + tx_ty) *
         #          (outputs[1] + tx_tz) *
         #          (outputs[3] + ty_tz))
         #vol_tv = outputs
 
+        vol_tv = self.feature_coefs
         # Typing: output gets converted to a tensor after the first iteration of the loop
         assert isinstance(output, Tensor)
+
         return output, vol_tv
         #print(output.shape)
         #exit(-1)

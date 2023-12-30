@@ -180,19 +180,21 @@ class Model(nn.Module):
         num_rays = len(camera_ray_bundle)
         #print("OUTS BUN: {}".format(num_rays))
         height_chunks = 144 #image_height // 4
-        width_chunks = 256 #image_width // 4
+        num_heights = 720 // height_chunks
+        width_chunks = 128 #image_width // 4
+        num_widths = 1280 // width_chunks
         outputs_lists = defaultdict(list)
-        for i in range(1,2): #,height_chunks,image_height): #, num_rays, num_rays_per_chunk):
+        for i in range(num_heights): #,height_chunks,image_height): #, num_rays, num_rays_per_chunk):
             first_round = True
-            for j in range(2,3): #,width_chunks,image_width):
+            for j in range(num_widths): #,width_chunks,image_width):
                 #start_idx = i
                 #end_idx = i + num_rays_per_chunk
                 #ray_bundle = camera_ray_bundle #camera_ray_bundle.get_row_major_sliced_ray_bundle(start_idx, end_idx)
                 new_bundle = []
                 curr_height_chunks = height_chunks
                 curr_width_chunks = width_chunks
-                curr_mod_height = 128
-                curr_mod_width = 64
+                curr_mod_height = 0
+                curr_mod_width = 0
                 for ray_bundle in camera_ray_bundle:
                     
                     curr_ray_bundle = ray_bundle[i*curr_height_chunks:(i+1)*curr_height_chunks + curr_mod_height,
@@ -213,7 +215,7 @@ class Model(nn.Module):
                         continue
                     if first_round:
                         outputs_lists[output_name].append([])
-                    outputs_lists[output_name][0].append(output)
+                    outputs_lists[output_name][i].append(output)
                 first_round = False
         #image_height *= 8
         #image_width *= 8
@@ -223,8 +225,7 @@ class Model(nn.Module):
             for sub_output in outputs_list:
                 new_outs = []
                 for outs in sub_output:
-                    print(outs.shape)
-                    new_outs.append(outs.reshape(height_chunks + 128, width_chunks + 64, -1))
+                    new_outs.append(outs.reshape(height_chunks, width_chunks, -1))
                 sub_lst.append(torch.cat(new_outs,dim=1))
             #outputs[output_name] = torch.cat(outputs_list).view(image_height, image_width, -1)  # type: ignore
             outputs[output_name] = torch.cat(sub_lst,dim=0)
