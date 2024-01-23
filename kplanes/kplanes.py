@@ -489,7 +489,9 @@ class KPlanesModel(Model):
             ray_stuffs = ray_stuffs.reshape(-1,self.patch_size[0],self.patch_size[1],ray_stuffs.shape[-1]).permute(0,3,1,2)
         else:
             ray_stuffs = ray_stuffs.unsqueeze(0).permute(0,3,1,2)
-        curr_dim_delts = [4,6,7]
+        #curr_dim_delts = [4,6,7]
+        curr_dim_delts = [0,0,0]
+
         for rbidx,ray_bundle in enumerate(ray_bundles[1:]):
 
             '''

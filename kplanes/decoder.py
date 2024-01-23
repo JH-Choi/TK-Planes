@@ -3,15 +3,15 @@ import torch
 import torch.nn as nn
 
 def conv3x3(in_channels, out_channels, stride=1,
-            padding=0, bias=False, groups=1):
+            padding=1, bias=False, groups=1):
     return nn.Conv2d(
         in_channels,
         out_channels,
         kernel_size=3,
         stride=stride,
         padding=padding,
-        #padding_mode='replicate',
-        padding_mode='zeros',        
+        padding_mode='replicate',
+        #padding_mode='zeros',        
         bias=bias,
         groups=groups)
 
@@ -281,6 +281,7 @@ class ImageDecoder(nn.Module):
         #x = self.norm0(x)
         x_lst = x
         x = x_lst[-1]
+
         reverse_counter = -2
         for idx,l in enumerate(self.layers):
             x = l(x)

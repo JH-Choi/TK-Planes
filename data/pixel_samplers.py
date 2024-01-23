@@ -434,8 +434,10 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
         num_images = self.num_to_select
         curr_dim = self.patch_size# // 2
         #self.init_dim = curr_dim
-        self.curr_dim_delts = [0,4,6,7]
-        self.curr_dwh_delts = [0,2,3,4]
+        #self.curr_dim_delts = [0,4,6,7]
+        #self.curr_dwh_delts = [0,2,3,4]
+        self.curr_dim_delts = [0,0,0,0]
+        self.curr_dwh_delts = [0,0,0,0]        
         
         for idx in range(4):
             curr_dim_0 = curr_dim[0]

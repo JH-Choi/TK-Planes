@@ -433,8 +433,10 @@ class Cameras(TensorDataclass):
         coords_lst = None
         if coords is None:
             coords_lst = []
-            dim_delts = [0,4,6,7]
-            dwh_delts = [0,2,3,4]
+            #dim_delts = [0,4,6,7]
+            #dwh_delts = [0,2,3,4]
+            dim_delts = [0,0,0,0]
+            dwh_delts = [0,0,0,0]            
             booly = True
             index_dim = camera_indices.shape[-1]
             index = camera_indices.reshape(-1, index_dim)[0]
