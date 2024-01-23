@@ -655,8 +655,8 @@ class KPlanesEncoding(Encoding):
         self.feature_coefs.append(nn.Parameter(torch.empty([self.select_dim[0], self.num_components])))
         self.feature_coefs.append(nn.Parameter(torch.empty([self.select_dim[1], self.num_components])))        
         self.feature_coefs = nn.ParameterList(self.feature_coefs)
-        nn.init.normal_(self.feature_coefs[0], 0, 0.01)
-        nn.init.normal_(self.feature_coefs[1], 0, 0.01)
+        nn.init.normal_(self.feature_coefs[0], 0, 0.1)
+        nn.init.normal_(self.feature_coefs[1], 0, 0.1)
         self.feature_softmax_layer = nn.Softmax(dim=1)
         #self.feature_coefs = nn.ParameterList()        
         #self.coo_combs = [(0,1),(0,2),(1,2), (0,1),(0,3),(1,3), (0,2),(0,3),(2,3), (1,2),(1,3),(2,3)]
@@ -681,11 +681,11 @@ class KPlanesEncoding(Encoding):
                 #with torch.no_grad():
                 #    new_plane_coef = new_plane_coef*100
                 #nn.init.uniform_(new_plane_coef, a=init_a, b=init_b)
-                nn.init.uniform_(new_plane_coef, a=-0.1, b=0.1)    
+                nn.init.uniform_(new_plane_coef, a=-0.01, b=0.01)    
             #elif coo_idx > 5:
             #    nn.init.uniform_(new_plane_coef, a=-0.1, b=0.1)
             else:
-                nn.init.uniform_(new_plane_coef, a=init_a, b=init_b)
+                nn.init.uniform_(new_plane_coef, a=-0.01, b=0.01) #init_a, b=init_b)
             #nn.init.uniform_(new_feature_coef, a=-0.1, b=0.1)
             self.plane_coefs.append(new_plane_coef)
             #self.feature_coefs.append(new_feature_coef)

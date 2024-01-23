@@ -189,7 +189,7 @@ class KPlanesModel(Model):
         scale = 4
         feat_dim = self.config.grid_feature_dim // 4
         self.start_feat_dim = feat_dim * (self.config.grid_select_dim[0] + self.config.grid_select_dim[1])
-
+        
         curr_res = [res * 4 if idx < 3 else res for idx,res in enumerate(self.config.grid_base_resolution)]
         self.patch_size = self.config.patch_size
         self.fields = []
@@ -208,9 +208,11 @@ class KPlanesModel(Model):
                 linear_decoder=self.config.linear_decoder,
                 linear_decoder_layers=self.config.linear_decoder_layers,
             )
+            #field = torch.compile(field)
             #for g in field.grids:
             #    for p in g.plane_coefs:
             #        print(p.shape)
+
             self.fields.append(field)
             scale = scale // 2
             feat_dim = feat_dim * 2
@@ -265,9 +267,12 @@ class KPlanesModel(Model):
         
         #self.ray_bundle_encoder = torch.nn.ModuleList(self.ray_bundle_encoder)
         self.final_dim = self.config.patch_size
+        decoder_feat_dim_start = ((self.config.grid_feature_dim // 2) * self.config.grid_select_dim[0],
+                                  (self.config.grid_feature_dim // 2) * self.config.grid_select_dim[1])
+
         self.decoder = ImageDecoder(input_dim=(self.final_dim[0] // 8,self.final_dim[1] // 8),
                                     final_dim=(self.final_dim[0],self.final_dim[1]),
-                                    feature_dim=self.start_feat_dim,mode='upscale')
+                                    feature_dim=decoder_feat_dim_start,mode='upscale')
         
         self.density_fns = []
         num_prop_nets = self.config.num_proposal_iterations
@@ -331,6 +336,7 @@ class KPlanesModel(Model):
         for i in [4,2,1]:
             collider = NearFarCollider(near_plane=self.config.near_plane / i, far_plane=self.config.far_plane*i)
             self.colliders.append(collider)
+
         self.colliders = torch.nn.ModuleList(self.colliders)
 
         # renderers
@@ -468,11 +474,11 @@ class KPlanesModel(Model):
         ray_samples_list = []
         self.vol_tvs = []
         num_samps = self.config.num_samples*4 # 2**2 for three stages
-        feat_dim = self.start_feat_dim // 4
+        feat_dim = self.start_feat_dim // 2
         curr_dim = [self.final_dim[0] // 2, self.final_dim[1] // 2]
         rgb_images = []
         ray_bundle = ray_bundles[0]
-
+        
         ray_stuffs = [ray_bundle.origins,
                       ray_bundle.directions,
                       ray_bundle.pixel_area,
@@ -483,9 +489,10 @@ class KPlanesModel(Model):
             ray_stuffs = ray_stuffs.reshape(-1,self.patch_size[0],self.patch_size[1],ray_stuffs.shape[-1]).permute(0,3,1,2)
         else:
             ray_stuffs = ray_stuffs.unsqueeze(0).permute(0,3,1,2)
-
+        curr_dim_delts = [4,6,7]
         for rbidx,ray_bundle in enumerate(ray_bundles[1:]):
-            
+
+            '''
             #ray_stuffs = self.ray_bundle_encoder[rbidx](ray_stuffs) + self.ray_bundle_encoder_avg[rbidx](ray_stuffs)
             ray_stuffs = self.ray_bundle_encoder_avg[rbidx](ray_stuffs)            
 
@@ -499,7 +506,7 @@ class KPlanesModel(Model):
             ray_bundle.pixel_area = new_ray_bundle_stuffs[:,6].unsqueeze(-1)
             ray_bundle.nears = new_ray_bundle_stuffs[:,7].unsqueeze(-1)
             ray_bundle.fars = new_ray_bundle_stuffs[:,8].unsqueeze(-1)
-            
+            '''
             orig_shape = None
             if len(ray_bundle.shape) > 1:
                 orig_shape = ray_bundle.shape
@@ -509,8 +516,15 @@ class KPlanesModel(Model):
             ray_samples = self.proposal_sampler(            
                 ray_bundle, num_samps #, density_fns=density_fns
             )
+
             field_outputs = self.fields[rbidx](ray_samples)
 
+            curr_dim_0 = curr_dim[0] 
+            curr_dim_1 = curr_dim[1]
+
+            curr_dim_0 += curr_dim_delts[rbidx]
+            curr_dim_1 += curr_dim_delts[rbidx]
+                
             #weights = ray_samples.get_weights(field_outputs[FieldHeadNames.DENSITY])
             weights = field_outputs[FieldHeadNames.DENSITY]
             weights_list.append(weights)
@@ -524,7 +538,7 @@ class KPlanesModel(Model):
             self.vol_tvs.append(field_outputs["vol_tvs"]) #[0])
 
             if orig_shape is None:
-                rgb_image = rgb.reshape((-1,curr_dim[0],curr_dim[1],feat_dim)) #.transpose(2,0,1)
+                rgb_image = rgb.reshape((-1,curr_dim_0,curr_dim_1,feat_dim)) #.transpose(2,0,1)
             else:
                 rgb_image = rgb.reshape((1,) + orig_shape + (feat_dim,))
 
@@ -535,6 +549,7 @@ class KPlanesModel(Model):
             num_samps = num_samps // 2
 
         reconst_image = self.decoder(rgb_images).permute(0,2,3,1) #.unsqueeze(0)).permute(0,2,3,1)
+        
         self.img_save_counter = (self.img_save_counter + 1) % 50
         if self.img_save_counter == 0:
             self.reconst_image_np = reconst_image.detach().cpu().reshape(-1,reconst_image.shape[2],reconst_image.shape[3]).numpy()
@@ -622,13 +637,12 @@ class KPlanesModel(Model):
         #mask_image = mask_image / 255.
         #image = image*(1 - image_mask_bool) + mask_image*image_mask_bool
         #image = (1 - image_mask) + red_image*image_mask
-        output_rgb = outputs["rgb"].view(image.shape)
-        patch_weights = batch["patch_weights"].to(output_rgb.device)
-
-        rgb_loss = torch.sum(((image - output_rgb)**2).mean((1,2,3))*patch_weights)
-
-        loss_dict = {"rgb": rgb_loss}
-        #loss_dict = {"rgb": self.rgb_loss(image.reshape(-1,3), outputs["rgb"])}
+        #output_rgb = outputs["rgb"].view(image.shape)
+        #patch_weights = batch["patch_weights"].to(output_rgb.device)
+        #rgb_loss = torch.sum(((image - output_rgb)**2).mean((1,2,3))*patch_weights)
+        #loss_dict = {"rgb": rgb_loss}
+        
+        loss_dict = {"rgb": self.rgb_loss(image.reshape(-1,3), outputs["rgb"])}
         #loss_dict = {"rgb": self.rgb_loss(self.field.masks*image, outputs["rgb"])}        
         self.cosine_idx += 1
 
@@ -656,17 +670,17 @@ class KPlanesModel(Model):
             #grid_norm = 0.0
             local_vol_tvs = 0.0
             #outputs_lst = []
-            #for odx,_outputs in enumerate(outputs_lst):
+            for odx,_outputs in enumerate(outputs_lst[-1:]):
                 #continue
                 #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[0],_outputs[6])).mean()
                 #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[1],_outputs[7])).mean()
                 #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[3],_outputs[8])).mean()
-            #    o0 = torch.nn.functional.normalize(_outputs[0][0],p=1,dim=1)
-            #    o1 = torch.nn.functional.normalize(_outputs[0][1],p=1,dim=1)                
-            #    tmp = torch.abs(torch.matmul(o0,o1.permute(1,0)))
+                o0 = torch.nn.functional.normalize(_outputs[0][0],p=1,dim=1)
+                o1 = torch.nn.functional.normalize(_outputs[0][1],p=1,dim=1)                
+                tmp = torch.abs(torch.matmul(o0,o1.permute(1,0)))
                 #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[0][0],_outputs[0][1])).mean()
-            #    local_vol_tvs += torch.sum(tmp)
-            
+                local_vol_tvs += torch.sum(tmp)
+
             #for grid_idx,grids in enumerate(field_grids):
             #    continue
             #    grid_norm += torch.abs(1 - torch.norm(grids[0],2,0)).mean()
@@ -679,7 +693,7 @@ class KPlanesModel(Model):
             #loss_dict["camera_delts"] += (torch.abs(self.pos_diff[non_zero_idxs])*image_diff).mean()
             #loss_dict["camera_delts"] = (torch.abs(self.rot_angs*image_diff)).mean()
             #loss_dict["camera_delts"] += (torch.abs(self.pos_diff*image_diff)).mean()
-            #loss_dict["local_vol_tvs"] = 0.000001*local_vol_tvs / len(outputs_lst)
+            loss_dict["local_vol_tvs"] = 0.00001*local_vol_tvs / len(outputs_lst)
             #loss_dict["grid_norm"] = 0.01*grid_norm / (6*len(outputs_lst))
             
             #loss_dict["time_masks"] = time_mask_loss

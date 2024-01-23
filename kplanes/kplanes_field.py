@@ -118,7 +118,7 @@ class KPlanesField(Field):
         self.register_buffer("aabb", aabb)
         self.num_images = num_images
         self.grid_select_dim = grid_select_dim
-        self.geo_feat_dim = (grid_feature_dim * (self.grid_select_dim[0] + self.grid_select_dim[1]) // 4) #- 1 #geo_feat_dim
+        self.geo_feat_dim = (grid_feature_dim * (self.grid_select_dim[0] + self.grid_select_dim[1]) // 2) #- 1 #geo_feat_dim
         self.grid_base_resolution = list(grid_base_resolution)
         self.concat_across_scales = concat_across_scales
         self.spatial_distortion = spatial_distortion
@@ -181,18 +181,20 @@ class KPlanesField(Field):
                 n_input_dims=self.feature_dim,
                 n_output_dims=self.geo_feat_dim * 2, #+ 1,
                 network_config={
-                    "otype": "CutlassMLP", #"FullyFusedMLP",
+                    "otype": "CutlassMLP",
+                    #"otype": "FullyFusedMLP",                    
                     "activation": "ReLU",
+                    #"activation": "LeakyReLU",                    
                     "output_activation": "None",
                     "n_neurons": self.geo_feat_dim * 2 * 2, #64
-                    "n_hidden_layers": 1, #1
+                    "n_hidden_layers": 1
                 },
             )
             self.direction_encoding = tcnn.Encoding(
                 n_input_dims=3,
                 encoding_config={
                     "otype": "SphericalHarmonics",
-                    "degree": 6, #4,
+                    "degree": 4,
                 },
             )
             in_dim_color = (
@@ -203,12 +205,14 @@ class KPlanesField(Field):
                 n_input_dims=in_dim_color,
                 n_output_dims=self.geo_feat_dim, #3,
                 network_config={
-                    "otype": "CutlassMLP", #"FullyFusedMLP",
+                    "otype": "CutlassMLP",
+                    #"otype": "FullyFusedMLP",                    
                     "activation": "ReLU",
+                    #"activation": "LeakyReLU",                                        
                     #"output_activation": "ReLU", #"None", #"Sigmoid",
                     "output_activation": "None", #"Sigmoid",                    
                     "n_neurons": in_dim_color * 2, #64
-                    "n_hidden_layers": 2, #2
+                    "n_hidden_layers": 2,
                 },
             )
 

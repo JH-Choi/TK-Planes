@@ -45,6 +45,8 @@ class OkutamaDataParserConfig(DataParserConfig):
     """Directory specifying location of data."""
     scale_factor: float = 1.0
     """How much to scale the camera origins by."""
+    height: float = 720.0
+    width: float = 1280.0
     alpha_color: str = "white"
     """alpha color of background"""
 
@@ -61,6 +63,8 @@ class Okutama(DataParser):
         self.data: Path = config.data
         self.scale_factor: float = config.scale_factor
         self.alpha_color = config.alpha_color
+        self.width = config.width
+        self.height = config.height
 
     def _generate_dataparser_outputs(self, split="train"):
         if self.alpha_color is not None:
@@ -91,8 +95,8 @@ class Okutama(DataParser):
         fx = meta['fl_x']
         fy = meta['fl_y']
         
-        cx = 1280. / 2 #meta['cx']
-        cy = 720. / 2 #meta['cy']
+        cx = self.width / 2 #meta['cx']
+        cy = self.height / 2 #meta['cy']
         camera_to_world = torch.from_numpy(poses[:, :3])  # camera to world transform
 
         # in x,y,z order
@@ -105,6 +109,8 @@ class Okutama(DataParser):
             fy=fy, #focal_length,
             cx=cx,
             cy=cy,
+            #width=int(self.width),
+            #height=int(self.height),
             camera_type=CameraType.PERSPECTIVE,
             times=times,
         )

@@ -146,7 +146,6 @@ class Cameras(TensorDataclass):
         self.width = self._init_get_height_width(width, self.cx)
         self.camera_type = self._init_get_camera_type(camera_type)
         self.times = self._init_get_times(times)
-
         self.metadata = metadata
 
         self.__post_init__()  # This will do the dataclass post_init and broadcast all the tensors
@@ -367,6 +366,10 @@ class Cameras(TensorDataclass):
         Returns:
             Rays for the given camera indices and coords.
         """
+
+        #print(self.height)
+        #print(self.cy,self.cx)
+        #exit(-1)
         # Check the argument types to make sure they're valid and all shaped correctly
         assert isinstance(camera_indices, (torch.Tensor, int)), "camera_indices must be a tensor or int"
         assert coords is None or isinstance(coords, torch.Tensor), "coords must be a tensor or None"
@@ -430,20 +433,24 @@ class Cameras(TensorDataclass):
         coords_lst = None
         if coords is None:
             coords_lst = []
+            dim_delts = [0,4,6,7]
+            dwh_delts = [0,2,3,4]
             booly = True
             index_dim = camera_indices.shape[-1]
             index = camera_indices.reshape(-1, index_dim)[0]
-            for curr_ray_mult in [1,2,4,8]:
+            for midx,curr_ray_mult in enumerate([1,2,4,8]):
                 old_height = self.height
-                self.height = self.height // curr_ray_mult
+                self.height = (self.height // curr_ray_mult) + dim_delts[midx]
                 old_width = self.width
-                self.width = self.width // curr_ray_mult
+                self.width = (self.width // curr_ray_mult) + dim_delts[midx]
                 coords = cameras.get_image_coords(index=tuple(index))  # (h, w, 2)
                 coords = coords.reshape(coords.shape[:2] + (1,) * len(camera_indices.shape[:-1]) + (2,))  # (h, w, 1..., 2)
                 coords = coords.expand(coords.shape[:2] + camera_indices.shape[:-1] + (2,))  # (h, w, num_rays, 2)
                 self.height = old_height
                 self.width = old_width
+                coords -= dwh_delts[midx]
                 coords_lst.append(coords)
+
             #print("CAM COORDS: {}".format(coords.shape))
             #print("CAM HEIGH, WIDTH: {}".format((self.height,self.width)))
             #print("CAM: {}".format(cameras.shape))
