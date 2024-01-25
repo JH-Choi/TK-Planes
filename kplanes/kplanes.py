@@ -494,21 +494,20 @@ class KPlanesModel(Model):
 
         for rbidx,ray_bundle in enumerate(ray_bundles[1:]):
 
-            '''
             #ray_stuffs = self.ray_bundle_encoder[rbidx](ray_stuffs) + self.ray_bundle_encoder_avg[rbidx](ray_stuffs)
             ray_stuffs = self.ray_bundle_encoder_avg[rbidx](ray_stuffs)            
 
             new_ray_bundle_stuffs = ray_stuffs.permute(0,2,3,1).reshape(-1,ray_stuffs.shape[1])
             new_ray_bundle_stuffs[:,:3] = new_ray_bundle_stuffs[:,:3] / 2
-            #new_ray_bundle_stuffs[:,6] = new_ray_bundle_stuffs[:,6] / 4
-            new_ray_bundle_stuffs[:,7] = new_ray_bundle_stuffs[:,7] / 2
-            new_ray_bundle_stuffs[:,8] = new_ray_bundle_stuffs[:,8] / 2            
+            new_ray_bundle_stuffs[:,6] = new_ray_bundle_stuffs[:,6] / 4
+            #new_ray_bundle_stuffs[:,7] = new_ray_bundle_stuffs[:,7] / 2
+            #new_ray_bundle_stuffs[:,8] = new_ray_bundle_stuffs[:,8] / 2            
             ray_bundle.origins = new_ray_bundle_stuffs[:,:3]
             ray_bundle.directions = new_ray_bundle_stuffs[:,3:6]
             ray_bundle.pixel_area = new_ray_bundle_stuffs[:,6].unsqueeze(-1)
-            ray_bundle.nears = new_ray_bundle_stuffs[:,7].unsqueeze(-1)
-            ray_bundle.fars = new_ray_bundle_stuffs[:,8].unsqueeze(-1)
-            '''
+            #ray_bundle.nears = new_ray_bundle_stuffs[:,7].unsqueeze(-1)
+            #ray_bundle.fars = new_ray_bundle_stuffs[:,8].unsqueeze(-1)
+
             orig_shape = None
             if len(ray_bundle.shape) > 1:
                 orig_shape = ray_bundle.shape
@@ -674,14 +673,15 @@ class KPlanesModel(Model):
             #outputs_lst = []
             for odx,_outputs in enumerate(outputs_lst[-1:]):
                 #continue
-                #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[0],_outputs[6])).mean()
-                #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[1],_outputs[7])).mean()
-                #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[3],_outputs[8])).mean()
-                o0 = torch.nn.functional.normalize(_outputs[0][0],p=1,dim=1)
-                o1 = torch.nn.functional.normalize(_outputs[0][1],p=1,dim=1)                
-                tmp = torch.abs(torch.matmul(o0,o1.permute(1,0)))
-                #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[0][0],_outputs[0][1])).mean()
-                local_vol_tvs += torch.sum(tmp)
+                for sdx in range(9):
+                    #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[0],_outputs[6])).mean()
+                    #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[1],_outputs[7])).mean()
+                    #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[3],_outputs[8])).mean()
+                    o0 = torch.nn.functional.normalize(_outputs[0][0][sdx],p=1,dim=1)
+                    o1 = torch.nn.functional.normalize(_outputs[0][1][sdx],p=1,dim=1)                
+                    tmp = torch.abs(torch.matmul(o0,o1.permute(1,0)))
+                    #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[0][0],_outputs[0][1])).mean()
+                    local_vol_tvs += torch.sum(tmp)
 
             #for grid_idx,grids in enumerate(field_grids):
             #    continue

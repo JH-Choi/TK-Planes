@@ -181,15 +181,15 @@ class Model(nn.Module):
         #num_rays_per_chunk = image_height * image_width
         num_rays = len(camera_ray_bundle)
         #print("OUTS BUN: {}".format(num_rays))
-        #height_chunks = 144
         #dim_delts = [0,4,6,7]
         #dwh_delts = [0,2,3,4]
         dim_delts = [0,0,0,0]
-        dwh_delts = [0,0,0,0]        
-        height_chunks = 240
+        dwh_delts = [0,0,0,0]
+        height_chunks = 144        
+        #height_chunks = 240
         num_heights = actual_height // height_chunks
-        #width_chunks = 256
-        width_chunks = 320
+        width_chunks = 256
+        #width_chunks = 320
         num_widths = actual_width // width_chunks
         outputs_lists = defaultdict(list)
         for i in range(num_heights): #,height_chunks,image_height): #, num_rays, num_rays_per_chunk):

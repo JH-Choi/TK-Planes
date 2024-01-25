@@ -398,8 +398,8 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
         self.keep_full_image = keep_full_image
         self.indices = []
         self.num_to_select = 1
-        self.actual_height = 720 // 2
-        self.actual_width = 1280 // 2
+        self.actual_height = 720 #// 2
+        self.actual_width = 1280 #// 2
         dh_lst = [[] for _ in range(self.num_to_select)]
         for idx in range(self.num_to_select):
             dh_start = 0 #random.randint(0,1)*(self.patch_size[0] // 2) #self.patch_size[0] - 1)
@@ -549,7 +549,7 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
             #dw = dw.repeat_interleave(3).repeat(2)
             dw_og = dw #list(dw.numpy())
             dh_og = dh #list(dh.numpy())
-            curr_dwh_delts = [0,3,5,6]
+            
             for idx,index in enumerate(self.indices):
                 curr_dim_0 = curr_dim[0]
                 curr_dim_1 = curr_dim[1]
