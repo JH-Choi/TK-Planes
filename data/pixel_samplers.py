@@ -383,7 +383,11 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
 
         self.select_idxs = [] #[i for i in range(153)]
         top_lst = []
-        self.img_repeat_num = 25
+        self.actual_height = 720 #// 2
+        self.actual_width = 1280 #// 2
+        num_height = self.actual_height // self.patch_size[0]
+        num_width = self.actual_width // self.patch_size[1]        
+        self.img_repeat_num = (num_height + 1) * (num_width + 1)
         for i in range(153):
             temp_lst = []
             for j in range(self.img_repeat_num):
@@ -398,25 +402,34 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
         self.keep_full_image = keep_full_image
         self.indices = []
         self.num_to_select = 1
-        self.actual_height = 720 #// 2
-        self.actual_width = 1280 #// 2
+
+        self.d_height = self.patch_size[0] / num_height
+        self.d_height_diff = self.d_height - int(self.d_height)
+        self.d_width = self.patch_size[1] / num_width
+        self.d_width_diff = self.d_width - int(self.d_width)        
         dh_lst = [[] for _ in range(self.num_to_select)]
         for idx in range(self.num_to_select):
             dh_start = 0 #random.randint(0,1)*(self.patch_size[0] // 2) #self.patch_size[0] - 1)
             #for dh_idx in range((720 // self.patch_size) - 1):
-            #    dh_lst[idx].append(dh_start + dh_idx*self.patch_size)                
+            #    dh_lst[idx].append(dh_start + dh_idx*self.patch_size)
+            curr_d_height_diff = 0
             while dh_start + self.patch_size[0] <= self.actual_height:
+                curr_d_height_diff += self.d_height_diff
                 dh_lst[idx].append(dh_start)
-                dh_start += self.patch_size[0]
+                dh_start += (self.patch_size[0] - int(self.d_height) - int(curr_d_height_diff))
+                curr_d_height_diff = curr_d_height_diff % 1
             random.shuffle(dh_lst[idx])
         dw_lst = [[] for _ in range(self.num_to_select)]
         for idx in range(self.num_to_select):
             dw_start = 0 #random.randint(0,1)*(self.patch_size[1] // 2) #self.patch_size[1] - 1)
             #for dw_idx in range((1280 // self.patch_size) - 1):
             #    dw_lst[idx].append(dw_start + dw_idx*self.patch_size)
+            curr_d_width_diff = 0
             while dw_start + self.patch_size[1] <= self.actual_width:
+                curr_d_width_diff += self.d_width_diff
                 dw_lst[idx].append(dw_start)
-                dw_start += self.patch_size[1]
+                dw_start += self.patch_size[1] - int(self.d_width) - int(curr_d_width_diff)
+                curr_d_width_diff = curr_d_width_diff % 1
             random.shuffle(dw_lst[idx])
 
         self.dw_len = len(dw_lst[0])
@@ -514,9 +527,12 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
                     #dw_start = random.randint(0,1) * random.randint(self.patch_size[1] // 4, self.patch_size[1] // 2) #self.patch_size[1] - 1)                    
                     #for dw_idx in range((1280 // self.patch_size) - 1):
                     #    dw_lst[idx].append(dw_start + dw_idx*self.patch_size)
+                    curr_d_width_diff = 0
                     while dw_start + self.patch_size[1] <= self.actual_width:
+                        curr_d_width_diff += self.d_width_diff
                         dw_lst[idx].append(dw_start)
-                        dw_start += self.patch_size[1]                        
+                        dw_start += (self.patch_size[1] - int(self.d_width) - int(curr_d_width_diff))
+                        curr_d_width_diff = curr_d_width_diff % 1
                     random.shuffle(dw_lst[idx])
                 self.dw_len = len(dw_lst[0])
                 self.dw_lst = torch.tensor(dw_lst)
@@ -527,11 +543,14 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
                     #dh_start = random.randint(0,1) * random.randint(self.patch_size[0] // 4, self.patch_size[0] // 2) #self.patch_size[0] - 1)                    
                     #for dh_idx in range((720 // self.patch_size) - 1):
                     #    dh_lst[idx].append(dh_start + dh_idx*self.patch_size)
+                    curr_d_height_diff = 0
                     while dh_start + self.patch_size[0] <= self.actual_height:
+                        curr_d_height_diff += self.d_height_diff
                         dh_lst[idx].append(dh_start)
-                        dh_start += self.patch_size[0]                        
+                        dh_start += (self.patch_size[0] - int(self.d_height) - int(curr_d_height_diff))
+                        curr_d_height_diff = curr_d_height_diff % 1
                     random.shuffle(dh_lst[idx])
-                    
+
                 self.dh_len = len(dh_lst[0])
                 self.dh_lst = torch.tensor(dh_lst)
                 self.dw_lst = self.dw_lst.repeat([1,self.dh_len])                
