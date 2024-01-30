@@ -491,6 +491,10 @@ class Cameras(TensorDataclass):
                 )
                 raybundles.append(raybundle)
         else:
+            print(camera_indices.shape)
+            print('HEREEEEEEE')
+            #exit(-1)
+            
             camera_indices = camera_indices.broadcast_to(coords.shape[:-1] + (len(cameras.shape),)).to(torch.long)
             raybundles = cameras._generate_rays_from_coords(
                 camera_indices, coords, camera_opt_to_camera, distortion_params_delta, disable_distortion=disable_distortion,ray_mult=ray_mult

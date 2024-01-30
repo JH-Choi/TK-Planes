@@ -642,8 +642,23 @@ class KPlanesModel(Model):
         #patch_weights = batch["patch_weights"].to(output_rgb.device)
         #rgb_loss = torch.sum(((image - output_rgb)**2).mean((1,2,3))*patch_weights)
         #loss_dict = {"rgb": rgb_loss}
-        
-        loss_dict = {"rgb": self.rgb_loss(image.reshape(-1,3), outputs["rgb"])}
+        #print(image.shape)
+        #print(outputs["rgb"].shape)
+        _,img_h,img_w,_ = image.shape
+        num_h = 720 // img_h
+        num_w = 1280 // img_w
+        buffer_h = (img_h // num_h) // 2
+        buffer_w = (img_w // num_w) // 2
+        buffer_h = 32
+        buffer_h = 32
+        curr_outputs = outputs["rgb"].view(image.shape)
+        loss_image = image[:,buffer_h:-buffer_h,buffer_w:-buffer_w]
+        curr_outputs = curr_outputs[:,buffer_h:-buffer_h,buffer_w:-buffer_w]
+        #print(curr_outputs.shape)
+        #print(loss_image.shape)
+        #exit(-1)        
+        loss_dict = {"rgb": self.rgb_loss(loss_image.reshape(-1,3), curr_outputs.reshape(-1,3))}
+        #loss_dict = {"rgb": self.rgb_loss(image.reshape(-1,3), outputs["rgb"])}        
         #loss_dict = {"rgb": self.rgb_loss(self.field.masks*image, outputs["rgb"])}        
         self.cosine_idx += 1
 
