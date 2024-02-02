@@ -489,14 +489,15 @@ class KPlanesModel(Model):
             ray_stuffs = ray_stuffs.reshape(-1,self.patch_size[0],self.patch_size[1],ray_stuffs.shape[-1]).permute(0,3,1,2)
         else:
             ray_stuffs = ray_stuffs.unsqueeze(0).permute(0,3,1,2)
-        #curr_dim_delts = [4,6,7]
-        curr_dim_delts = [0,0,0]
+        curr_dim_delts = [4,6,7]
+        #curr_dim_delts = [0,0,0]
 
         for rbidx,ray_bundle in enumerate(ray_bundles[1:]):
 
             #ray_stuffs = self.ray_bundle_encoder[rbidx](ray_stuffs) + self.ray_bundle_encoder_avg[rbidx](ray_stuffs)
-            ray_stuffs = self.ray_bundle_encoder_avg[rbidx](ray_stuffs)            
+            #ray_stuffs = self.ray_bundle_encoder_avg[rbidx](ray_stuffs)            
 
+            '''
             new_ray_bundle_stuffs = ray_stuffs.permute(0,2,3,1).reshape(-1,ray_stuffs.shape[1])
             new_ray_bundle_stuffs[:,:3] = new_ray_bundle_stuffs[:,:3] / 2
             new_ray_bundle_stuffs[:,6] = new_ray_bundle_stuffs[:,6] / 4
@@ -507,7 +508,7 @@ class KPlanesModel(Model):
             ray_bundle.pixel_area = new_ray_bundle_stuffs[:,6].unsqueeze(-1)
             #ray_bundle.nears = new_ray_bundle_stuffs[:,7].unsqueeze(-1)
             #ray_bundle.fars = new_ray_bundle_stuffs[:,8].unsqueeze(-1)
-
+            '''
             orig_shape = None
             if len(ray_bundle.shape) > 1:
                 orig_shape = ray_bundle.shape
@@ -644,21 +645,21 @@ class KPlanesModel(Model):
         #loss_dict = {"rgb": rgb_loss}
         #print(image.shape)
         #print(outputs["rgb"].shape)
-        _,img_h,img_w,_ = image.shape
-        num_h = 720 // img_h
-        num_w = 1280 // img_w
-        buffer_h = (img_h // num_h) // 2
-        buffer_w = (img_w // num_w) // 2
-        buffer_h = 32
-        buffer_h = 32
-        curr_outputs = outputs["rgb"].view(image.shape)
-        loss_image = image[:,buffer_h:-buffer_h,buffer_w:-buffer_w]
-        curr_outputs = curr_outputs[:,buffer_h:-buffer_h,buffer_w:-buffer_w]
+        #_,img_h,img_w,_ = image.shape
+        #num_h = 720 // img_h
+        #num_w = 1280 // img_w
+        #buffer_h = (img_h // num_h) // 2
+        #buffer_w = (img_w // num_w) // 2
+        #buffer_h = 32
+        #buffer_h = 32
+        #curr_outputs = outputs["rgb"].view(image.shape)
+        #loss_image = image[:,buffer_h:-buffer_h,buffer_w:-buffer_w]
+        #curr_outputs = curr_outputs[:,buffer_h:-buffer_h,buffer_w:-buffer_w]
         #print(curr_outputs.shape)
         #print(loss_image.shape)
         #exit(-1)        
-        loss_dict = {"rgb": self.rgb_loss(loss_image.reshape(-1,3), curr_outputs.reshape(-1,3))}
-        #loss_dict = {"rgb": self.rgb_loss(image.reshape(-1,3), outputs["rgb"])}        
+        #loss_dict = {"rgb": self.rgb_loss(loss_image.reshape(-1,3), curr_outputs.reshape(-1,3))}
+        loss_dict = {"rgb": self.rgb_loss(image.reshape(-1,3), outputs["rgb"])}        
         #loss_dict = {"rgb": self.rgb_loss(self.field.masks*image, outputs["rgb"])}        
         self.cosine_idx += 1
 

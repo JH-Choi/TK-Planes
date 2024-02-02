@@ -433,10 +433,10 @@ class Cameras(TensorDataclass):
         coords_lst = None
         if coords is None:
             coords_lst = []
-            #dim_delts = [0,4,6,7]
-            #dwh_delts = [0,2,3,4]
-            dim_delts = [0,0,0,0]
-            dwh_delts = [0,0,0,0]            
+            dim_delts = [0,4,6,7]
+            dwh_delts = [0,2,3,4]
+            #dim_delts = [0,0,0,0]
+            #dwh_delts = [0,0,0,0]            
             booly = True
             index_dim = camera_indices.shape[-1]
             index = camera_indices.reshape(-1, index_dim)[0]
@@ -484,17 +484,18 @@ class Cameras(TensorDataclass):
         raybundles = []
         if coords_lst:
             og_camera_indices = camera_indices
+            ray_mult = 1
             for curr_coords in coords_lst:
                 camera_indices = og_camera_indices.broadcast_to(curr_coords.shape[:-1] + (len(cameras.shape),)).to(torch.long)
                 raybundle = cameras._generate_rays_from_coords(
                     camera_indices, curr_coords, camera_opt_to_camera, distortion_params_delta, disable_distortion=disable_distortion,ray_mult=ray_mult
                 )
+                #ray_mult *= 2
                 raybundles.append(raybundle)
         else:
-            print(camera_indices.shape)
-            print('HEREEEEEEE')
+            #print(camera_indices.shape)
+            #print('HEREEEEEEE')
             #exit(-1)
-            
             camera_indices = camera_indices.broadcast_to(coords.shape[:-1] + (len(cameras.shape),)).to(torch.long)
             raybundles = cameras._generate_rays_from_coords(
                 camera_indices, coords, camera_opt_to_camera, distortion_params_delta, disable_distortion=disable_distortion,ray_mult=ray_mult
@@ -628,13 +629,14 @@ class Cameras(TensorDataclass):
         # Get all our focal lengths, principal points and make sure they are the right shapes
         y = coords[..., 0]  # (num_rays,) get rid of the last dimension
         x = coords[..., 1]  # (num_rays,) get rid of the last dimension
+
         fx, fy = self.fx[true_indices].squeeze(-1), self.fy[true_indices].squeeze(-1)  # (num_rays,)
         cx, cy = self.cx[true_indices].squeeze(-1), self.cy[true_indices].squeeze(-1)  # (num_rays,)
 
-        fx = fx / ray_mult
-        fy = fy / ray_mult
-        cx = cx / ray_mult
-        cy = cy / ray_mult        
+        fx = fx #/ ray_mult
+        fy = fy #/ ray_mult
+        cx = cx #/ ray_mult
+        cy = cy #/ ray_mult        
         assert (
             y.shape == num_rays_shape
             and x.shape == num_rays_shape
@@ -666,7 +668,7 @@ class Cameras(TensorDataclass):
         # Stack image coordinates and image coordinates offset by 1, check shapes too
         coord_stack = torch.stack([coord, coord_x_offset, coord_y_offset], dim=0)  # (3, num_rays, 2)
         assert coord_stack.shape == (3,) + num_rays_shape + (2,)
-
+        
         # Undistorts our images according to our distortion parameters
         if not disable_distortion:
             distortion_params = None
@@ -766,9 +768,10 @@ class Cameras(TensorDataclass):
             if CameraType.PERSPECTIVE.value in cam_types:
                 mask = (self.camera_type[true_indices] == CameraType.PERSPECTIVE.value).squeeze(-1)  # (num_rays)
                 mask = torch.stack([mask, mask, mask], dim=0)
+
                 directions_stack[..., 0][mask] = torch.masked_select(coord_stack[..., 0], mask).float()
                 directions_stack[..., 1][mask] = torch.masked_select(coord_stack[..., 1], mask).float()
-                directions_stack[..., 2][mask] = -1.0
+                directions_stack[..., 2][mask] = -1.0 #/ ray_mult
 
             elif CameraType.FISHEYE.value in cam_types:
                 mask = (self.camera_type[true_indices] == CameraType.FISHEYE.value).squeeze(-1)  # (num_rays)
@@ -822,10 +825,12 @@ class Cameras(TensorDataclass):
         directions_stack = torch.sum(
             directions_stack[..., None, :] * rotation, dim=-1
         )  # (..., 1, 3) * (..., 3, 3) -> (..., 3)
+
         directions_stack, directions_norm = camera_utils.normalize_with_norm(directions_stack, -1)
         assert directions_stack.shape == (3,) + num_rays_shape + (3,)
 
-        origins = c2w[..., :3, 3]  # (..., 3)
+        #origins = c2w[..., :3, 3]  # (..., 3)
+        origins = c2w[..., :3, 3] #/ ray_mult  # (..., 3)        
         assert origins.shape == num_rays_shape + (3,)
 
         directions = directions_stack[0]

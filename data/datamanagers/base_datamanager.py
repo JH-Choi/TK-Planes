@@ -530,7 +530,7 @@ class VanillaDataManager(DataManager, Generic[TDataset]):
         for ray_index in ray_indices:
             ray_bundle = self.train_ray_generator(ray_index,ray_mult)
             ray_bundles.append(ray_bundle)
-            #ray_mult *= 2
+            ray_mult *= 2
 
         #ray_bundle = self.train_ray_generator(ray_indices)
         #print(ray_bundle.metadata["directions_norm"].shape)
