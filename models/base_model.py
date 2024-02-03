@@ -141,7 +141,8 @@ class Model(nn.Module):
             cidx = [0,0,1,2]
 
             for idx,rb in enumerate(ray_bundle):
-                rb = self.colliders[cidx[idx]](rb)
+                #rb = self.colliders[cidx[idx]](rb)
+                rb = self.collider(rb)                
                 ray_bundles.append(rb)
 
             #ray_bundle = self.collider(ray_bundle)            
@@ -181,10 +182,10 @@ class Model(nn.Module):
         #num_rays_per_chunk = image_height * image_width
         num_rays = len(camera_ray_bundle)
         #print("OUTS BUN: {}".format(num_rays))
-        dim_delts = [0,4,6,7]
-        dwh_delts = [0,2,3,4]
-        #dim_delts = [0,0,0,0]
-        #dwh_delts = [0,0,0,0]
+        #dim_delts = [0,4,6,7]
+        #dwh_delts = [0,2,3,4]
+        dim_delts = [0,0,0,0]
+        dwh_delts = [0,0,0,0]
         height_chunks = 144        
         #height_chunks = 240        
         num_heights = actual_height // height_chunks

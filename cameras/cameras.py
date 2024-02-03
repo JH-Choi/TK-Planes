@@ -433,10 +433,10 @@ class Cameras(TensorDataclass):
         coords_lst = None
         if coords is None:
             coords_lst = []
-            dim_delts = [0,4,6,7]
-            dwh_delts = [0,2,3,4]
-            #dim_delts = [0,0,0,0]
-            #dwh_delts = [0,0,0,0]            
+            #dim_delts = [0,4,6,7]
+            #dwh_delts = [0,2,3,4]
+            dim_delts = [0,0,0,0]
+            dwh_delts = [0,0,0,0]            
             booly = True
             index_dim = camera_indices.shape[-1]
             index = camera_indices.reshape(-1, index_dim)[0]
@@ -446,11 +446,13 @@ class Cameras(TensorDataclass):
                 old_width = self.width
                 self.width = (self.width // curr_ray_mult) + dim_delts[midx]
                 coords = cameras.get_image_coords(index=tuple(index))  # (h, w, 2)
+                coords *= curr_ray_mult
+                coords += (curr_ray_mult // 2)
                 coords = coords.reshape(coords.shape[:2] + (1,) * len(camera_indices.shape[:-1]) + (2,))  # (h, w, 1..., 2)
                 coords = coords.expand(coords.shape[:2] + camera_indices.shape[:-1] + (2,))  # (h, w, num_rays, 2)
                 self.height = old_height
                 self.width = old_width
-                coords -= dwh_delts[midx]
+                coords -= dwh_delts[midx]*curr_ray_mult
                 coords_lst.append(coords)
 
             #print("CAM COORDS: {}".format(coords.shape))

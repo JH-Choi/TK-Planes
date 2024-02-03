@@ -332,12 +332,12 @@ class KPlanesModel(Model):
 
         # Collider
         self.collider = NearFarCollider(near_plane=self.config.near_plane, far_plane=self.config.far_plane)
-        self.colliders = []
-        for i in [4,2,1]:
-            collider = NearFarCollider(near_plane=self.config.near_plane / i, far_plane=self.config.far_plane*i)
-            self.colliders.append(collider)
+        #self.colliders = []
+        #for i in [4,2,1]:
+        #    collider = NearFarCollider(near_plane=self.config.near_plane / i, far_plane=self.config.far_plane*i)
+        #    self.colliders.append(collider)
 
-        self.colliders = torch.nn.ModuleList(self.colliders)
+        #self.colliders = torch.nn.ModuleList(self.colliders)
 
         # renderers
         self.renderer_rgb = FeatureRenderer(background_color=self.config.background_color)
@@ -489,8 +489,8 @@ class KPlanesModel(Model):
             ray_stuffs = ray_stuffs.reshape(-1,self.patch_size[0],self.patch_size[1],ray_stuffs.shape[-1]).permute(0,3,1,2)
         else:
             ray_stuffs = ray_stuffs.unsqueeze(0).permute(0,3,1,2)
-        curr_dim_delts = [4,6,7]
-        #curr_dim_delts = [0,0,0]
+        #curr_dim_delts = [4,6,7]
+        curr_dim_delts = [0,0,0]
 
         for rbidx,ray_bundle in enumerate(ray_bundles[1:]):
 
