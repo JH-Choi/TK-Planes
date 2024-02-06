@@ -447,10 +447,10 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
         num_images = self.num_to_select
         curr_dim = self.patch_size# // 2
         #self.init_dim = curr_dim
-        #self.curr_dim_delts = [0,4,6,7]
-        #self.curr_dwh_delts = [0,2,3,4]
-        self.curr_dim_delts = [0,0,0,0]
-        self.curr_dwh_delts = [0,0,0,0]        
+        self.curr_dim_delts = [0,4,6,7]
+        self.curr_dwh_delts = [0,2,3,3.5]
+        #self.curr_dim_delts = [0,0,0,0]
+        #self.curr_dwh_delts = [0,0,0,0]        
 
         idx_mult = 1
         for idx in range(4):
@@ -466,10 +466,21 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
             #curr_dim_0 = 4
             #curr_dim_1 = 6
             curr_indices = super().sample_method(batch_size, num_images, curr_dim_0, curr_dim_1, mask=None, all_pixels=True) #device="cuda:0",all_pixels=True)
-            #print(curr_indices)
-            #exit(-1)
+            curr_indices = curr_indices.type(torch.float)
             curr_indices *= idx_mult
-            curr_indices += (idx_mult // 2)
+            #curr_indices += ((idx_mult - 1) // 2)
+            #curr_indices -= (self.curr_dwh_delts[idx])*(2**idx)
+
+            #y_differ = (((curr_dim[0] + self.curr_dim_delts[idx] - 1) * (2**idx)) - curr_dim[0]) / 2
+            #x_differ = (((curr_dim[1] + self.curr_dim_delts[idx] - 1) * (2**idx)) - curr_dim[1]) / 2
+            y_differ = (((curr_dim[0] + self.curr_dim_delts[idx] - 1) * (2**idx)) + 1 - self.patch_size[0]) / 2
+            x_differ = (((curr_dim[1] + self.curr_dim_delts[idx] - 1) * (2**idx)) + 1 - self.patch_size[1]) / 2            
+            curr_indices[:,1] -= y_differ
+            curr_indices[:,2] -= x_differ
+            #x_differ += ((idx_mult - 1) // 2)
+            #y_differ += ((idx_mult - 1) // 2)            
+            #print(x_differ, y_differ,(self.curr_dwh_delts[idx])*(2**idx) - ((idx_mult - 1) // 2))
+            #exit(-1)
             self.indices.append(curr_indices)
 
             curr_dim = [curr_dim[0] // 2, curr_dim[1] // 2]
@@ -578,7 +589,6 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
             #dw = dw.repeat_interleave(3).repeat(2)
             dw_og = dw #list(dw.numpy())
             dh_og = dh #list(dh.numpy())
-
             for idx,index in enumerate(self.indices):
                 curr_dim_0 = curr_dim[0]
                 curr_dim_1 = curr_dim[1]
@@ -586,11 +596,11 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
                 curr_dim_0 += self.curr_dim_delts[idx]
                 curr_dim_1 += self.curr_dim_delts[idx]
                     
-                curr_dw = dw.repeat_interleave(curr_dim_0*curr_dim_1)
-                curr_dh = dh.repeat_interleave(curr_dim_0*curr_dim_1)
-                curr_dw -= self.curr_dwh_delts[idx]*(2**idx)
-                curr_dh -= self.curr_dwh_delts[idx]*(2**idx)
-                    
+                curr_dw = dw.repeat_interleave(curr_dim_0*curr_dim_1).type(torch.float)
+                curr_dh = dh.repeat_interleave(curr_dim_0*curr_dim_1).type(torch.float)
+                #curr_dw -= (self.curr_dwh_delts[idx])*(2**idx)
+                #curr_dh -= (self.curr_dwh_delts[idx])*(2**idx)
+
                 #curr_select = select.repeat_interleave(curr_dim**2)
                 
                 curr_index = index.clone()#[curr_select]
@@ -601,5 +611,6 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
                 curr_dim = [curr_dim[0] // 2, curr_dim[1] // 2]
                 #dw = torch.ceil(dw / 2).to(int)
                 #dh = torch.ceil(dh / 2).to(int)
+
 
         return indices,dw_og,dh_og,select,self.patch_size, curr_select_idxs[0]

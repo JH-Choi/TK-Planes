@@ -307,6 +307,7 @@ class Cameras(TensorDataclass):
             image_width = self.image_width[index].item()
             image_coords = torch.meshgrid(torch.arange(image_height), torch.arange(image_width), indexing="ij")
             image_coords = torch.stack(image_coords, dim=-1) + pixel_offset  # stored as (y, x) coordinates
+
         return image_coords
 
     def generate_rays(
@@ -413,7 +414,7 @@ class Cameras(TensorDataclass):
         # If the cameras don't all have same height / width, if coords is not none, we will need to generate
         # a flat list of coords for each camera and then concatenate otherwise our rays will be jagged.
         # Camera indices, camera_opt, and distortion will also need to be broadcasted accordingly which is non-trivial
-
+        
         if cameras.is_jagged and coords is None and (keep_shape is None or keep_shape is False):
             index_dim = camera_indices.shape[-1]
             camera_indices = camera_indices.reshape(-1, index_dim)
@@ -433,26 +434,39 @@ class Cameras(TensorDataclass):
         coords_lst = None
         if coords is None:
             coords_lst = []
-            #dim_delts = [0,4,6,7]
-            #dwh_delts = [0,2,3,4]
-            dim_delts = [0,0,0,0]
-            dwh_delts = [0,0,0,0]            
+            dim_delts = [0,4,6,7]
+            dwh_delts = [0,2,3,3.5]
+            #dim_delts = [0,0,0,0]
+            #dwh_delts = [0,0,0,0]
+            og_height = 720
+            og_width = 1080
             booly = True
             index_dim = camera_indices.shape[-1]
             index = camera_indices.reshape(-1, index_dim)[0]
+
             for midx,curr_ray_mult in enumerate([1,2,4,8]):
                 old_height = self.height
                 self.height = (self.height // curr_ray_mult) + dim_delts[midx]
                 old_width = self.width
                 self.width = (self.width // curr_ray_mult) + dim_delts[midx]
                 coords = cameras.get_image_coords(index=tuple(index))  # (h, w, 2)
+                coords = coords.type(torch.float)
                 coords *= curr_ray_mult
-                coords += (curr_ray_mult // 2)
+                #coords += ((curr_ray_mult - 1) // 2)
+                y_differ = ((((og_height // curr_ray_mult) + dim_delts[midx] - 1) * (2**midx)) + 1 - og_height) / 2
+                x_differ = ((((og_width // curr_ray_mult) + dim_delts[midx] - 1) * (2**midx)) + 1 - og_width) / 2
+                coords[:,:,0] -= y_differ
+                coords[:,:,1] -= x_differ
+
+                #print("CHECK HOW STACKS LINE UP")
+                #exit(-1)
                 coords = coords.reshape(coords.shape[:2] + (1,) * len(camera_indices.shape[:-1]) + (2,))  # (h, w, 1..., 2)
                 coords = coords.expand(coords.shape[:2] + camera_indices.shape[:-1] + (2,))  # (h, w, num_rays, 2)
+                #coords -= dwh_delts[midx]*curr_ray_mult
+
                 self.height = old_height
                 self.width = old_width
-                coords -= dwh_delts[midx]*curr_ray_mult
+                
                 coords_lst.append(coords)
 
             #print("CAM COORDS: {}".format(coords.shape))
