@@ -447,8 +447,11 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
         num_images = self.num_to_select
         curr_dim = self.patch_size# // 2
         #self.init_dim = curr_dim
-        self.curr_dim_delts = [0,4,6,7]
-        self.curr_dwh_delts = [0,2,3,3.5]
+        #self.curr_dim_delts = [0,4,6,7]
+        self.curr_dim_delts = [0,8,8,8]
+        #self.curr_dim_delts = [0,2,5,7]        
+        
+        #self.curr_dwh_delts = [0,2,3,3.5]
         #self.curr_dim_delts = [0,0,0,0]
         #self.curr_dwh_delts = [0,0,0,0]        
 
@@ -460,7 +463,7 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
             curr_dim_0 += self.curr_dim_delts[idx]
             curr_dim_1 += self.curr_dim_delts[idx]
 
-            #print(curr_dim_0,curr_dim_1)
+            print(curr_dim_0,curr_dim_1)
             batch_size = (curr_dim_0*curr_dim_1)*num_images
             #batch_size = 24
             #curr_dim_0 = 4
@@ -471,8 +474,6 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
             #curr_indices += ((idx_mult - 1) // 2)
             #curr_indices -= (self.curr_dwh_delts[idx])*(2**idx)
 
-            #y_differ = (((curr_dim[0] + self.curr_dim_delts[idx] - 1) * (2**idx)) - curr_dim[0]) / 2
-            #x_differ = (((curr_dim[1] + self.curr_dim_delts[idx] - 1) * (2**idx)) - curr_dim[1]) / 2
             y_differ = (((curr_dim[0] + self.curr_dim_delts[idx] - 1) * (2**idx)) + 1 - self.patch_size[0]) / 2
             x_differ = (((curr_dim[1] + self.curr_dim_delts[idx] - 1) * (2**idx)) + 1 - self.patch_size[1]) / 2            
             curr_indices[:,1] -= y_differ

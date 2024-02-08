@@ -178,7 +178,7 @@ class Model(nn.Module):
         actual_height = 720 #// 2
         actual_width = 1280 #// 2
         num_rays_per_chunk = self.config.eval_num_rays_per_chunk
-        image_height, image_width = camera_ray_bundle[0].origins.shape[:2]
+        image_height, image_width = camera_ray_bundle[0][0].origins.shape[:2]
         #num_rays_per_chunk = image_height * image_width
         num_rays = len(camera_ray_bundle)
         #print("OUTS BUN: {}".format(num_rays))
@@ -195,12 +195,14 @@ class Model(nn.Module):
         num_widths = actual_width // width_chunks
         #num_widths += (num_widths - 1)
         outputs_lists = defaultdict(list)
+
         for i in range(num_heights): #,height_chunks,image_height): #, num_rays, num_rays_per_chunk):
             first_round = True
             for j in range(num_widths): #,width_chunks,image_width):
                 #start_idx = i
                 #end_idx = i + num_rays_per_chunk
                 #ray_bundle = camera_ray_bundle #camera_ray_bundle.get_row_major_sliced_ray_bundle(start_idx, end_idx)
+                '''
                 new_bundle = []
                 curr_height_chunks = height_chunks
                 curr_width_chunks = width_chunks
@@ -220,13 +222,13 @@ class Model(nn.Module):
                     curr_width_chunks = og_width_chunks // 2
                     og_height_chunks = og_height_chunks // 2
                     og_width_chunks = og_width_chunks // 2
-
+                '''
 
                 #exit(-1)
-
+                curr_bundle = camera_ray_bundle[i*num_widths + j]
                 #print("OUTTTIEEE: {}".format(ray_bundle.shape))
                 #print("OUTTTIEEE SHAPPPEEE: {}".format(ray_bundle.origins.shape))            
-                outputs = self.forward(ray_bundle=new_bundle) #ray_bundle)
+                outputs = self.forward(ray_bundle=curr_bundle) #ray_bundle)
                 for output_name, output in outputs.items():  # type: ignore
                     if not torch.is_tensor(output):
                         # TODO: handle lists of tensors as well
