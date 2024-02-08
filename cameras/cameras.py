@@ -459,13 +459,38 @@ class Cameras(TensorDataclass):
 
                 coords = cameras.get_image_coords(index=tuple(index))  # (h, w, 2)
                 coords = coords.type(torch.float)
-                coords *= curr_ray_mult
-                #coords += ((curr_ray_mult - 1) // 2)
-                y_differ = ((((patch_height // curr_ray_mult) + dim_delts[midx] - 1) * (2**midx)) + 1 - patch_height) / 2
-                x_differ = ((((patch_width // curr_ray_mult) + dim_delts[midx] - 1) * (2**midx)) + 1 - patch_width) / 2
-                coords[:,:,0] -= y_differ
-                coords[:,:,1] -= x_differ
+                if midx > 0:
+                    coords -= 0.5
+                    curr_ymax = torch.max(coords[:,:,0])                
+                    curr_xmax = torch.max(coords[:,:,1])
+                    #print((coords / 400) * 720)
+                    c_h = coords.shape[0] * 5
+                    c_w = coords.shape[1] * 5
 
+                    coords[:,:,0] = (coords[:,:,0] / c_h) * 720
+                    coords[:,:,1] = (coords[:,:,1] / c_w) * 1280
+                    #coords[:,:,0] = (coords[:,:,0] / curr_ymax)#*(patch_height - 1)
+                    #coords[:,:,1] = (coords[:,:,1] / curr_xmax)#*(patch_width - 1)
+                    #print(coords[:-1,:-1,0] - coords[1:,1:,0])
+
+                    #exit(-1)
+
+                    #coords[:,:,0] = coords[:,:,0] * (patch_height - 1)
+                    #coords[:,:,1] = coords[:,:,1] * (patch_width - 1)
+
+                    coords[:,:,0] += (720 / (2*c_h))
+                    coords[:,:,1] += (1280 / (2*c_w))
+                #print(coords.shape)
+
+                #coords *= curr_ray_mult
+                #coords += ((curr_ray_mult - 1) // 2)
+                #y_differ = ((((patch_height // curr_ray_mult) + dim_delts[midx] - 1) * (2**midx)) + 1 - patch_height) / 2
+                #x_differ = ((((patch_width // curr_ray_mult) + dim_delts[midx] - 1) * (2**midx)) + 1 - patch_width) / 2
+                #coords[:,:,0] -= y_differ
+                #coords[:,:,1] -= x_differ
+
+
+                
                 #print("CHECK HOW STACKS LINE UP")
                 #exit(-1)
                 coords = coords.reshape(coords.shape[:2] + (1,) * len(camera_indices.shape[:-1]) + (2,))  # (h, w, 1..., 2)
@@ -476,7 +501,7 @@ class Cameras(TensorDataclass):
                 self.width = old_width
                 
                 coords_lst.append(coords)
-
+            #exit(-1)
             img_coords_lst = []
             actual_height = orig_height[0].cpu().item()
             actual_width = orig_width[0].cpu().item()

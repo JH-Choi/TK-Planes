@@ -53,7 +53,7 @@ class RayGenerator(nn.Module):
         #coords = self.image_coords[y, x]
         #idx_mult = ray_indices[:,3].unsqueeze(-1).to(coords.device)        
         #coords += ((idx_mult - 1) / 2)
-        coords = ray_indices[:,1:].to(self.image_coords.device) + 0.5
+        coords = ray_indices[:,1:].to(self.image_coords.device) #+ 0.5
         c = c.type(torch.long)
 
         camera_opt_to_camera = self.pose_optimizer(c)

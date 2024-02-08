@@ -463,21 +463,34 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
             curr_dim_0 += self.curr_dim_delts[idx]
             curr_dim_1 += self.curr_dim_delts[idx]
 
-            print(curr_dim_0,curr_dim_1)
             batch_size = (curr_dim_0*curr_dim_1)*num_images
             #batch_size = 24
             #curr_dim_0 = 4
             #curr_dim_1 = 6
             curr_indices = super().sample_method(batch_size, num_images, curr_dim_0, curr_dim_1, mask=None, all_pixels=True) #device="cuda:0",all_pixels=True)
             curr_indices = curr_indices.type(torch.float)
-            curr_indices *= idx_mult
+            c_h = curr_dim_0 * 5
+            c_w = curr_dim_1 * 5
+            curr_indices[:,1] = (curr_indices[:,1] / c_h) * 720
+            curr_indices[:,2] = (curr_indices[:,2] / c_w) * 1280            
+
+            curr_indices[:,1] += (720 / (2*c_h))
+            curr_indices[:,2] += (1280 / (2*c_w))            
+            
+            #curr_xmax = torch.max(curr_indices[:,2])
+            #curr_ymax = torch.max(curr_indices[:,1])
+            #curr_indices[:,1] = (curr_indices[:,1] / curr_ymax)*(self.patch_size[0] - 1)
+            #curr_indices[:,2] = (curr_indices[:,2] / curr_xmax)*(self.patch_size[1] - 1)            
+            #print(torch.max(curr_indices[:,1]),torch.max(curr_indices[:,2]))
+
+            #curr_indices *= idx_mult
             #curr_indices += ((idx_mult - 1) // 2)
             #curr_indices -= (self.curr_dwh_delts[idx])*(2**idx)
 
-            y_differ = (((curr_dim[0] + self.curr_dim_delts[idx] - 1) * (2**idx)) + 1 - self.patch_size[0]) / 2
-            x_differ = (((curr_dim[1] + self.curr_dim_delts[idx] - 1) * (2**idx)) + 1 - self.patch_size[1]) / 2            
-            curr_indices[:,1] -= y_differ
-            curr_indices[:,2] -= x_differ
+            #y_differ = (((curr_dim[0] + self.curr_dim_delts[idx] - 1) * (2**idx)) + 1 - self.patch_size[0]) / 2
+            #x_differ = (((curr_dim[1] + self.curr_dim_delts[idx] - 1) * (2**idx)) + 1 - self.patch_size[1]) / 2            
+            #curr_indices[:,1] -= y_differ
+            #curr_indices[:,2] -= x_differ
             #x_differ += ((idx_mult - 1) // 2)
             #y_differ += ((idx_mult - 1) // 2)            
             #print(x_differ, y_differ,(self.curr_dwh_delts[idx])*(2**idx) - ((idx_mult - 1) // 2))
