@@ -186,15 +186,20 @@ class Model(nn.Module):
         #dim_delts = [0,0,0,0]        
         #dwh_delts = [0,2,3,4]
         #dwh_delts = [0,0,0,0]
-        height_chunks = 144        
+        ogg_height_chunks = 144
+        height_chunks = ogg_height_chunks
         #height_chunks = 240        
         num_heights = actual_height // height_chunks
         #num_heights += (num_heights - 1)
-        width_chunks = 256        
+        ogg_width_chunks = 256
+        width_chunks = ogg_width_chunks
         #width_chunks = 320
         num_widths = actual_width // width_chunks
         #num_widths += (num_widths - 1)
         outputs_lists = defaultdict(list)
+        dim_adder = 0
+        width_chunks += dim_adder
+        height_chunks += dim_adder
 
         for i in range(num_heights): #,height_chunks,image_height): #, num_rays, num_rays_per_chunk):
             first_round = True
@@ -229,6 +234,7 @@ class Model(nn.Module):
                 #print("OUTTTIEEE: {}".format(ray_bundle.shape))
                 #print("OUTTTIEEE SHAPPPEEE: {}".format(ray_bundle.origins.shape))            
                 outputs = self.forward(ray_bundle=curr_bundle) #ray_bundle)
+
                 for output_name, output in outputs.items():  # type: ignore
                     if not torch.is_tensor(output):
                         # TODO: handle lists of tensors as well
@@ -249,7 +255,8 @@ class Model(nn.Module):
                 new_outs = []
                 for oidx, outs in enumerate(sub_output):
                     new_out = outs.reshape(height_chunks, width_chunks, -1)
-
+                    if dim_adder > 0:
+                        new_out = new_out[(dim_adder//2):-(dim_adder//2),(dim_adder//2):-(dim_adder//2)]
                     '''
                     if oidx > 0:
                         new_out = new_out[:,w_quarter:]

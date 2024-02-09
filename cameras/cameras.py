@@ -134,6 +134,9 @@ class Cameras(TensorDataclass):
         self.fx = self._init_get_fc_xy(fx, "fx")  # @dataclass's post_init will take care of broadcasting
         self.fy = self._init_get_fc_xy(fy, "fy")  # @dataclass's post_init will take care of broadcasting
 
+        self.og_fx = fx
+        self.og_fy = fy
+        
         # cx cy calculation
         self.cx = self._init_get_fc_xy(cx, "cx")  # @dataclass's post_init will take care of broadcasting
         self.cy = self._init_get_fc_xy(cy, "cy")  # @dataclass's post_init will take care of broadcasting
@@ -169,6 +172,7 @@ class Cameras(TensorDataclass):
             fc_xy = fc_xy.to(self.device)
         else:
             raise ValueError(f"{name} must be a float or tensor, got {type(fc_xy)}")
+
         return fc_xy
 
     def _init_get_camera_type(
@@ -435,12 +439,13 @@ class Cameras(TensorDataclass):
         if coords is None:
             coords_lst = []
             #dim_delts = [0,4,6,7]
-            dim_delts = [0,8,8,8]            
+            dim_delts = [0,8,8,8]
             #dwh_delts = [0,2,3,3.5]
             #dim_delts = [0,0,0,0]
             #dwh_delts = [0,0,0,0]
-            patch_height = 144
-            patch_width = 256
+            dim_adder = 0
+            patch_height = 144 + dim_adder
+            patch_width = 256 + dim_adder
             booly = True
             index_dim = camera_indices.shape[-1]
             index = camera_indices.reshape(-1, index_dim)[0]
@@ -453,9 +458,9 @@ class Cameras(TensorDataclass):
             
             for midx,curr_ray_mult in enumerate([1,2,4,8]):
                 old_height = self.height
-                self.height = (self.height // curr_ray_mult) + dim_delts[midx]
+                self.height = (self.height // curr_ray_mult) + dim_delts[midx] + (dim_adder // curr_ray_mult)
                 old_width = self.width
-                self.width = (self.width // curr_ray_mult) + dim_delts[midx]
+                self.width = (self.width // curr_ray_mult) + dim_delts[midx] + (dim_adder // curr_ray_mult)
 
                 coords = cameras.get_image_coords(index=tuple(index))  # (h, w, 2)
                 coords = coords.type(torch.float)
@@ -464,22 +469,41 @@ class Cameras(TensorDataclass):
                     curr_ymax = torch.max(coords[:,:,0])                
                     curr_xmax = torch.max(coords[:,:,1])
                     #print((coords / 400) * 720)
-                    c_h = coords.shape[0] * 5
-                    c_w = coords.shape[1] * 5
+                    c_h = (patch_height / curr_ray_mult) * 5
+                    c_w = (patch_width  / curr_ray_mult) * 5
+                    #c_h = ((patch_height / curr_ray_mult) - curr_ray_mult + 1) * 5
+                    #c_w = ((patch_width  / curr_ray_mult) - curr_ray_mult + 1) * 5                    
+                    #c_h = (coords.shape[0] - (dim_adder / curr_ray_mult)) * 5
+                    #c_w = (coords.shape[1] - (dim_adder / curr_ray_mult)) * 5                    
+
+                    coords = coords - (dim_delts[midx] / 2)
 
                     coords[:,:,0] = (coords[:,:,0] / c_h) * 720
                     coords[:,:,1] = (coords[:,:,1] / c_w) * 1280
+
                     #coords[:,:,0] = (coords[:,:,0] / curr_ymax)#*(patch_height - 1)
                     #coords[:,:,1] = (coords[:,:,1] / curr_xmax)#*(patch_width - 1)
                     #print(coords[:-1,:-1,0] - coords[1:,1:,0])
+                    #print(coords[:-1,:-1,1] - coords[1:,1:,1])                    
 
                     #exit(-1)
 
                     #coords[:,:,0] = coords[:,:,0] * (patch_height - 1)
                     #coords[:,:,1] = coords[:,:,1] * (patch_width - 1)
-
                     coords[:,:,0] += (720 / (2*c_h))
                     coords[:,:,1] += (1280 / (2*c_w))
+
+                    #if midx == 3:
+                    #    print(coords)
+                    #    exit(-1)
+                    #coords[:,:,0] -= (dim_delts[midx] / 2)*(720 / c_h)
+                    #coords[:,:,1] -= (dim_delts[midx] / 2)*(1280 / c_w)                    
+                    #print(coords[:4])
+                    #print(coords[-4:])
+                    #print(self.height[0])
+                    #print(coords.shape)
+                    
+                    #exit(-1)
                 #print(coords.shape)
 
                 #coords *= curr_ray_mult
@@ -507,6 +531,8 @@ class Cameras(TensorDataclass):
             actual_width = orig_width[0].cpu().item()
             num_idxs = 0
 
+            patch_height -= dim_adder
+            patch_width -= dim_adder
             check_idxs = []
             for y_idx in range(actual_height // patch_height):
                 curr_coords_lst = []                    
@@ -520,10 +546,16 @@ class Cameras(TensorDataclass):
                         if x_idx == 1 and (y_idx == 0 or y_idx == 1) and c_idx == 2:
 
                             if y_idx == 0:
-                                check_idxs.append(new_indice[-8:])
+                                check_idxs.append(new_indice[-4:])
+                                #print(new_indice[-8:-4])
+
+                                #print(new_indice[:5])
+                                #print(new_indice[-5:])
                                 #print(new_indice.shape)
                             else:
-                                check_idxs.append(new_indice[:8])
+                                #print(new_indice[:5])
+                                #exit(-1)                                
+                                check_idxs.append(new_indice[4:8])
                     num_idxs += 1
                     curr_coords_lst.append(new_indices)
                 img_coords_lst.append(curr_coords_lst)
@@ -565,8 +597,8 @@ class Cameras(TensorDataclass):
         if coords_lst:
             og_camera_indices = camera_indices
             ray_mult = 1
-            for y_coords in coords_lst:
-                for x_coords in y_coords:
+            for y_coords in coords_lst: #[1:]:
+                for x_coords in y_coords: #[1:]:
                     second_raybundle = []
                     for curr_coords in x_coords:
                         camera_indices = og_camera_indices.broadcast_to(curr_coords.shape[:-1] + (len(cameras.shape),)).to(torch.long)
@@ -715,13 +747,18 @@ class Cameras(TensorDataclass):
         y = coords[..., 0]  # (num_rays,) get rid of the last dimension
         x = coords[..., 1]  # (num_rays,) get rid of the last dimension
 
+
+        self.fx[:,:] = 801.3665
+        self.fy[:,:] = 835.0484
         fx, fy = self.fx[true_indices].squeeze(-1), self.fy[true_indices].squeeze(-1)  # (num_rays,)
         cx, cy = self.cx[true_indices].squeeze(-1), self.cy[true_indices].squeeze(-1)  # (num_rays,)
+        #fx[:,:] = self.og_fx
+        #fy[:,:] = self.og_fy        
+        #fx = fx #/ ray_mult
+        #fy = fy #/ ray_mult
+        #cx = cx #/ ray_mult
+        #cy = cy #/ ray_mult
 
-        fx = fx #/ ray_mult
-        fy = fy #/ ray_mult
-        cx = cx #/ ray_mult
-        cy = cy #/ ray_mult        
         assert (
             y.shape == num_rays_shape
             and x.shape == num_rays_shape
@@ -919,6 +956,10 @@ class Cameras(TensorDataclass):
         assert origins.shape == num_rays_shape + (3,)
 
         directions = directions_stack[0]
+        #print(directions.reshape(-1,3))
+        #print(coord.reshape(-1,2))
+        #print(true_indices)
+        #exit(-1)
         assert directions.shape == num_rays_shape + (3,)
 
         # norms of the vector going between adjacent coords, giving us dx and dy per output ray

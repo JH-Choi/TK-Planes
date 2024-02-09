@@ -478,7 +478,8 @@ class KPlanesModel(Model):
         curr_dim = [self.final_dim[0] // 2, self.final_dim[1] // 2]
         rgb_images = []
         ray_bundle = ray_bundles[0]
-        
+
+        '''
         ray_stuffs = [ray_bundle.origins,
                       ray_bundle.directions,
                       ray_bundle.pixel_area,
@@ -489,8 +490,10 @@ class KPlanesModel(Model):
             ray_stuffs = ray_stuffs.reshape(-1,self.patch_size[0],self.patch_size[1],ray_stuffs.shape[-1]).permute(0,3,1,2)
         else:
             ray_stuffs = ray_stuffs.unsqueeze(0).permute(0,3,1,2)
+        '''
         #curr_dim_delts = [4,6,7]
         curr_dim_delts = [8,8,8]
+        dim_adder = 0
         #curr_dim_delts = [2,5,7]                
         #curr_dim_delts = [0,0,0]
 
@@ -523,8 +526,8 @@ class KPlanesModel(Model):
 
             field_outputs = self.fields[rbidx](ray_samples)
 
-            curr_dim_0 = curr_dim[0] 
-            curr_dim_1 = curr_dim[1]
+            curr_dim_0 = curr_dim[0] + int((dim_adder / (2**(rbidx + 1))))
+            curr_dim_1 = curr_dim[1] + int((dim_adder / (2**(rbidx + 1))))
 
             curr_dim_0 += curr_dim_delts[rbidx]
             curr_dim_1 += curr_dim_delts[rbidx]
@@ -553,6 +556,8 @@ class KPlanesModel(Model):
             num_samps = num_samps // 2
 
         reconst_image = self.decoder(rgb_images).permute(0,2,3,1) #.unsqueeze(0)).permute(0,2,3,1)
+        if dim_adder > 0:
+            reconst_image = reconst_image[:,dim_adder // 2:-(dim_adder // 2),dim_adder // 2:-(dim_adder // 2)]
         
         self.img_save_counter = (self.img_save_counter + 1) % 50
         if self.img_save_counter == 0:
