@@ -364,6 +364,8 @@ class KPlanesDensityField(Field):
             # position is [ray, sample, 3]; times is [ray, 1]
             times = times[:, None]  # RaySamples can handle the shape
         # Need to figure out a better way to descibe positions with a ray.
+        print(positions.shape)
+        exit(-1)
         ray_samples = RaySamples(
             frustums=Frustums(
                 origins=positions,

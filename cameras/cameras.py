@@ -431,14 +431,14 @@ class Cameras(TensorDataclass):
             index_dim = camera_indices.shape[-1]
             index = camera_indices.reshape(-1, index_dim)[0]
             old_height = self.height
-            self.height = self.height // 8
+            #self.height = self.height // 8
             old_width = self.width
-            self.width = self.width // 8
+            #self.width = self.width // 8
             coords = cameras.get_image_coords(index=tuple(index))  # (h, w, 2)
             coords = coords.reshape(coords.shape[:2] + (1,) * len(camera_indices.shape[:-1]) + (2,))  # (h, w, 1..., 2)
             coords = coords.expand(coords.shape[:2] + camera_indices.shape[:-1] + (2,))  # (h, w, num_rays, 2)
-            self.height = old_height
-            self.width = old_width
+            #self.height = old_height
+            #self.width = old_width
             #print("CAM COORDS: {}".format(coords.shape))
             #print("CAM HEIGH, WIDTH: {}".format((self.height,self.width)))
             #print("CAM: {}".format(cameras.shape))
