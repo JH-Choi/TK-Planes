@@ -2,6 +2,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+from .LimitGradLayer import LimitGradLayer
+
 def conv3x3(in_channels, out_channels, stride=1,
             padding=0, bias=False, groups=1):
     return nn.Conv2d(
@@ -77,6 +79,7 @@ class UpConv(nn.Module):
         self.first_layer = first_layer
         self.final_layer = final_layer
 
+        self.limit_layer = LimitGradLayer.apply
         #self.curr_dim = (self.out_channels,curr_dim,curr_dim)
 
         if not first_layer or True:
@@ -126,7 +129,7 @@ class UpConv(nn.Module):
         #self.norm1 = torch.nn.Identity()
         #curr_dim *= 2
         self.process_static = nn.Sequential(nn.InstanceNorm2d(curr_channels_s,affine=True),
-                                            conv3x3(curr_channels_s, 2*curr_channels_s),
+                                            conv3x3(curr_channels_s, 4*curr_channels_s),
                                             self.relu,
                                             #nn.InstanceNorm2d(2*curr_channels_s,affine=True),
                                             #conv3x3(2*curr_channels_s, 2*curr_channels_s),
@@ -134,12 +137,12 @@ class UpConv(nn.Module):
                                             #nn.InstanceNorm2d(2*curr_channels_s,affine=True),
                                             #conv3x3(2*curr_channels_s, 2*curr_channels_s),
                                             #self.relu,                                            
-                                            nn.InstanceNorm2d(2*curr_channels_s,affine=True),
-                                            conv3x3(2*curr_channels_s, self.out_channels[0]),
+                                            nn.InstanceNorm2d(4*curr_channels_s,affine=True),
+                                            conv1x1(4*curr_channels_s, self.out_channels[0]),
                                             self.relu)
 
         self.process_dynamic = nn.Sequential(nn.InstanceNorm2d(curr_channels_d,affine=True),
-                                            conv3x3(curr_channels_d, 2*curr_channels_d),
+                                            conv3x3(curr_channels_d, 4*curr_channels_d),
                                             self.relu,
                                             #nn.InstanceNorm2d(2*curr_channels_d,affine=True),
                                             #conv3x3(2*curr_channels_d, 2*curr_channels_d),
@@ -147,8 +150,8 @@ class UpConv(nn.Module):
                                             #nn.InstanceNorm2d(2*curr_channels_d,affine=True),
                                             #conv3x3(2*curr_channels_d, 2*curr_channels_d),
                                             #self.relu,                                             
-                                            nn.InstanceNorm2d(2*curr_channels_d,affine=True),
-                                            conv3x3(2*curr_channels_d, self.out_channels[1]),
+                                            nn.InstanceNorm2d(4*curr_channels_d,affine=True),
+                                            conv1x1(4*curr_channels_d, self.out_channels[1]),
                                             self.relu)
         
         ##self.norm2 = nn.InstanceNorm2d(curr_channels,affine=True)
@@ -176,14 +179,16 @@ class UpConv(nn.Module):
         if final_layer:
             curr_out_channels = self.out_channels[0] + self.out_channels[1]
             self.conv_final = nn.Sequential(#nn.InstanceNorm2d(self.out_channels),
-                                            conv5x5(curr_out_channels, curr_out_channels // 2, padding=0),
-                                            #conv1x1(curr_out_channels, curr_out_channels // 2),                
+                                            #conv5x5(curr_out_channels, curr_out_channels // 2, padding=0),
+                                            conv3x3(curr_out_channels, curr_out_channels * 4),                
                                             #nn.InstanceNorm2d(self.out_channels // 2),
                                             nn.LeakyReLU(0.02),
                                             #nn.InstanceNorm2d(self.out_channels // 2),
-                                            conv5x5(curr_out_channels // 2, curr_out_channels // 4, padding=0),
-                                            #conv1x1(curr_out_channels // 2, curr_out_channels // 4),                
+                                            #conv5x5(curr_out_channels // 2, curr_out_channels // 4, padding=0),
+                                            conv3x3(curr_out_channels * 4, curr_out_channels),                
                                             nn.LeakyReLU(0.02),
+                                            conv1x1(curr_out_channels, curr_out_channels // 4),                
+                                            nn.LeakyReLU(0.02),                
                                             #nn.InstanceNorm2d(self.out_channels // 4),                                            
                                             #conv3x3(curr_out_channels // 4, curr_out_channels // 8, padding=0),
                                             #nn.LeakyReLU(0.02),
@@ -193,7 +198,7 @@ class UpConv(nn.Module):
                                             #nn.Tanh())
                                             nn.Sigmoid()
             )
-    def forward(self, x):
+    def forward(self, x, dynamo):
         """ Forward pass
         Arguments:
             from_down: tensor from the encoder pathway
@@ -250,13 +255,18 @@ class UpConv(nn.Module):
         #x = x + skip_x2
 
         #x_s = x_s + skip_x_s
-        #x_d = x_d + skip_x_d        
+        #x_d = x_d + skip_x_d
+        #if self.final_layer:
+            #x_d = 0*x_d
+            #x_s = 0*x_s
+        x_d = self.limit_layer(x_d,dynamo)
         x = torch.concat([x_s,x_d],dim=1)
 
         #print(x.shape)
         #print('STOP')
         
         if self.final_layer:
+            
             x = self.conv_final(x)
             
         return x
@@ -287,7 +297,7 @@ class ImageDecoder(nn.Module):
         self.num_layers = len(self.layers)
         self.layers = nn.ModuleList(self.layers)
 
-    def forward(self,x):
+    def forward(self,x,dynamo):
         #x = self.norm0(x)
         x_lst = x
         x = x_lst[-1]
@@ -295,7 +305,7 @@ class ImageDecoder(nn.Module):
         reverse_counter = -2
         for idx,l in enumerate(self.layers):
             #print(x.shape)
-            x = l(x)
+            x = l(x,dynamo)
             #print(x.shape)
             #exit(-1)
 

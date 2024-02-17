@@ -118,11 +118,11 @@ kplanes_olddynamic_method = MethodSpecification(
 kplanes_dynamic_method = MethodSpecification(
     config=TrainerConfig(
         method_name="kplanes-dynamic",
-        gradient_accumulation_steps=9,
-        steps_per_eval_batch=150001,
+        gradient_accumulation_steps=3,
+        steps_per_eval_batch=200001,
         steps_per_save=100,
-        steps_per_eval_all_images=150001,
-        max_num_iterations=150001,
+        steps_per_eval_all_images=200001,
+        max_num_iterations=200001,
         mixed_precision=True,
         pipeline=VanillaPipelineConfig(
             datamanager=VanillaDataManagerConfig(
@@ -141,8 +141,8 @@ kplanes_dynamic_method = MethodSpecification(
             model=KPlanesModelConfig(
                 eval_num_rays_per_chunk=1 << 2,
                 grid_base_resolution=[10, 10, 5, 77],  # time-resolution should be half the time-steps
-                grid_feature_dim=16,
-                grid_select_dim=[64,32],
+                grid_feature_dim=32,
+                grid_select_dim=[48,16],
                 patch_size=[144,256],
                 #patch_size=[240,256],                
                 #patch_size=[240,320], 
@@ -165,7 +165,7 @@ kplanes_dynamic_method = MethodSpecification(
                     "distortion": 0.01,
                     "plane_tv": 0.01,
                     "plane_tv_proposal_net": 0.0001,
-                    "l1_time_planes": 0.001,
+                    "l1_time_planes": 0.01,
                     "l1_time_planes_proposal_net": 0.001,
                     "time_smoothness": 0.01,
                     "time_smoothness_proposal_net": 0.0001,
@@ -178,12 +178,12 @@ kplanes_dynamic_method = MethodSpecification(
             #    "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=100000),
             #},
             "fields": {
-                "optimizer": AdamOptimizerConfig(lr=1e-4, eps=1e-12),
-                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=150000),
+                "optimizer": AdamOptimizerConfig(lr=3e-4, eps=1e-12),
+                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=200000),
             },
             "decoder": {
-                "optimizer": AdamOptimizerConfig(lr=1e-4, eps=1e-12),
-                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=150000),
+                "optimizer": AdamOptimizerConfig(lr=3e-4, eps=1e-12),
+                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=200000),
             },
             #"ray_bundle_encoder": {
             #    "optimizer": AdamOptimizerConfig(lr=1e-5, eps=1e-12),

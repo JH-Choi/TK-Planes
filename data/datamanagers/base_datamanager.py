@@ -529,13 +529,14 @@ class VanillaDataManager(DataManager, Generic[TDataset]):
         ray_mult = 1
         for ray_index in ray_indices:
             ray_bundle = self.train_ray_generator(ray_index,ray_mult)
+            ray_bundle.metadata["dynamo"] = batch["dynamo"]
             ray_bundles.append(ray_bundle)
             ray_mult *= 2
 
         #ray_bundle = self.train_ray_generator(ray_indices)
         #print(ray_bundle.metadata["directions_norm"].shape)
         #print(batch["time_mask"].unsqueeze(-1).shape)
-
+        
         #ray_bundle.metadata["time_mask"] = batch["time_mask"]
 
         return ray_bundles, batch

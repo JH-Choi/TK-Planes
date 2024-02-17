@@ -653,8 +653,10 @@ class KPlanesEncoding(Encoding):
         self.coo_combs = [(0,1),(0,2),(0,3), (1,2),(1,3),(2,3), (0,1),(0,2),(1,2)]        
         self.plane_coefs = nn.ParameterList()
         self.feature_coefs = []
-        self.feature_coefs.append(nn.Parameter(torch.empty([len(self.coo_combs),self.select_dim[0], self.num_components])))
-        self.feature_coefs.append(nn.Parameter(torch.empty([len(self.coo_combs),self.select_dim[1], self.num_components])))        
+        #self.feature_coefs.append(nn.Parameter(torch.empty([len(self.coo_combs),self.select_dim[0], self.num_components])))
+        #self.feature_coefs.append(nn.Parameter(torch.empty([len(self.coo_combs),self.select_dim[1], self.num_components])))
+        self.feature_coefs.append(nn.Parameter(torch.empty([self.select_dim[0], self.num_components])))
+        self.feature_coefs.append(nn.Parameter(torch.empty([self.select_dim[1], self.num_components])))                
         self.feature_coefs = nn.ParameterList(self.feature_coefs)
         nn.init.normal_(self.feature_coefs[0], 0, 0.1)
         nn.init.normal_(self.feature_coefs[1], 0, 0.1)
@@ -682,11 +684,11 @@ class KPlanesEncoding(Encoding):
                 #with torch.no_grad():
                 #    new_plane_coef = new_plane_coef*100
                 #nn.init.uniform_(new_plane_coef, a=init_a, b=init_b)
-                nn.init.uniform_(new_plane_coef, a=-0.1, b=0.1)    
+                nn.init.uniform_(new_plane_coef, a=-5, b=-3)    
             #elif coo_idx > 5:
             #    nn.init.uniform_(new_plane_coef, a=-0.1, b=0.1)
             else:
-                nn.init.uniform_(new_plane_coef, a=-0.1, b=0.1) #init_a, b=init_b)
+                nn.init.uniform_(new_plane_coef, a=-5, b=5) #init_a, b=init_b)
             #nn.init.uniform_(new_feature_coef, a=-0.1, b=0.1)
             self.plane_coefs.append(new_plane_coef)
             #self.feature_coefs.append(new_feature_coef)
@@ -810,17 +812,33 @@ class KPlanesEncoding(Encoding):
         #                outputs[6]*outputs[7]*outputs[8])
 
         selection_func = torch.sigmoid
-        
-        xyz_static = ((selection_func(outputs[0]).unsqueeze(-1) * (self.feature_coefs[0][0].unsqueeze(0))) *
-                      (selection_func(outputs[1]).unsqueeze(-1) * (self.feature_coefs[0][1].unsqueeze(0))) *
-                      (selection_func(outputs[3]).unsqueeze(-1) * (self.feature_coefs[0][3].unsqueeze(0))))
+        select_kwargs = {}        
+        #selection_func = torch.softmax
+        #select_kwargs = {"dim":1}        
+        #test_vec = torch.ones_like(self.feature_coefs[0][0])
+        #test_vec[-5] = 0
 
-        xyz_temporal = ((selection_func(outputs[2]).unsqueeze(-1) * (self.feature_coefs[1][2].unsqueeze(0))) *
-                        (selection_func(outputs[4]).unsqueeze(-1) * (self.feature_coefs[1][4].unsqueeze(0))) *
-                        (selection_func(outputs[5]).unsqueeze(-1) * (self.feature_coefs[1][5].unsqueeze(0))) *
-                        (selection_func(outputs[6]).unsqueeze(-1) * (self.feature_coefs[1][6].unsqueeze(0))) *
-                        (selection_func(outputs[7]).unsqueeze(-1) * (self.feature_coefs[1][7].unsqueeze(0))) *                      
-                        (selection_func(outputs[8]).unsqueeze(-1) * (self.feature_coefs[1][8].unsqueeze(0))))        
+        #xyz_static = ((selection_func(outputs[0]).unsqueeze(-1) * (self.feature_coefs[0][0].unsqueeze(0))) *
+        #              (selection_func(outputs[1]).unsqueeze(-1) * (self.feature_coefs[0][1].unsqueeze(0))) *
+        #              (selection_func(outputs[3]).unsqueeze(-1) * (self.feature_coefs[0][3].unsqueeze(0))))
+        xyz_static = (selection_func(outputs[0],**select_kwargs).unsqueeze(-1) * 
+                      selection_func(outputs[1],**select_kwargs).unsqueeze(-1) * 
+                      selection_func(outputs[3],**select_kwargs).unsqueeze(-1)) * self.feature_coefs[0].unsqueeze(0)
+
+        #xyz_static = xyz_static * test_vec.unsqueeze(0)
+        
+        #xyz_temporal = ((selection_func(outputs[2]).unsqueeze(-1) * (self.feature_coefs[1][2].unsqueeze(0))) *
+        #                (selection_func(outputs[4]).unsqueeze(-1) * (self.feature_coefs[1][4].unsqueeze(0))) *
+        #                (selection_func(outputs[5]).unsqueeze(-1) * (self.feature_coefs[1][5].unsqueeze(0))) *
+        #                (selection_func(outputs[6]).unsqueeze(-1) * (self.feature_coefs[1][6].unsqueeze(0))) *
+        #                (selection_func(outputs[7]).unsqueeze(-1) * (self.feature_coefs[1][7].unsqueeze(0))) *                      
+        #                (selection_func(outputs[8]).unsqueeze(-1) * (self.feature_coefs[1][8].unsqueeze(0))))
+        xyz_temporal = (selection_func(outputs[2],**select_kwargs).unsqueeze(-1) * 
+                        selection_func(outputs[4],**select_kwargs).unsqueeze(-1) * 
+                        selection_func(outputs[5],**select_kwargs).unsqueeze(-1) * 
+                        selection_func(outputs[6],**select_kwargs).unsqueeze(-1) * 
+                        selection_func(outputs[7],**select_kwargs).unsqueeze(-1) * 
+                        selection_func(outputs[8],**select_kwargs).unsqueeze(-1)) * self.feature_coefs[1].unsqueeze(0)
 
 
 
