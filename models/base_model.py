@@ -179,9 +179,10 @@ class Model(nn.Module):
             end_idx = i + num_rays_per_chunk
             ray_bundle = camera_ray_bundle #camera_ray_bundle.get_row_major_sliced_ray_bundle(start_idx, end_idx)
             #print("OUTTTIEEE: {}".format(ray_bundle.shape))
-            #print("OUTTTIEEE SHAPPPEEE: {}".format(ray_bundle.origins.shape))            
+            #print("OUTTTIEEE SHAPPPEEE: {}".format(ray_bundle.origins.shape))
             outputs = self.forward(ray_bundle=ray_bundle)
-
+            print(outputs['rgb'].shape)
+            exit(-1)
             for output_name, output in outputs.items():  # type: ignore
                 if not torch.is_tensor(output):
                     # TODO: handle lists of tensors as well

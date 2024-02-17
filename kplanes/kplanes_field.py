@@ -365,6 +365,10 @@ class KPlanesDensityField(Field):
             times = times[:, None]  # RaySamples can handle the shape
         # Need to figure out a better way to descibe positions with a ray.
         print(positions.shape)
+        print(torch.ones_like(positions).shape)
+        print(torch.zeros_like(positions[..., :1]).shape)
+        print(torch.ones_like(positions[..., :1]).shape)
+        print(times.shape)
         exit(-1)
         ray_samples = RaySamples(
             frustums=Frustums(

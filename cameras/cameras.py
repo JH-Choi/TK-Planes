@@ -502,6 +502,7 @@ class Cameras(TensorDataclass):
         # TODO: We should have to squeeze the last dimension here if we started with zero batch dims, but never have to,
         # so there might be a rogue squeeze happening somewhere, and this may cause some unintended behaviour
         # that we haven't caught yet with tests
+
         return raybundle
 
     def _generate_rays_from_coords(
