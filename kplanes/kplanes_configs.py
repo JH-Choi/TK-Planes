@@ -132,7 +132,7 @@ kplanes_dynamic_method = MethodSpecification(
                 camera_res_scale_factor=0.5,  # DNeRF train on 400x400
             ),
             model=KPlanesModelConfig(
-                eval_num_rays_per_chunk=1 << 11,
+                eval_num_rays_per_chunk=1 << 15,
                 grid_base_resolution=[128, 128, 64, 77],  # time-resolution should be half the time-steps
                 grid_feature_dim=32,
                 near_plane=5,

@@ -170,19 +170,24 @@ class Model(nn.Module):
         """
         num_rays_per_chunk = self.config.eval_num_rays_per_chunk
         image_height, image_width = camera_ray_bundle.origins.shape[:2]
-        num_rays_per_chunk = image_height * image_width
+        #num_rays_per_chunk = image_height * image_width
         num_rays = len(camera_ray_bundle)
-        #print("OUTS BUN: {}".format(num_rays))        
+        num_rays_per_chunk = 1<<15
+        #print("OUTS BUN: {}".format(num_rays))
+        #print(num_rays_per_chunk)
         outputs_lists = defaultdict(list)
         for i in range(0, num_rays, num_rays_per_chunk):
             start_idx = i
             end_idx = i + num_rays_per_chunk
-            ray_bundle = camera_ray_bundle #camera_ray_bundle.get_row_major_sliced_ray_bundle(start_idx, end_idx)
+            #ray_bundle = camera_ray_bundle
+            ray_bundle = camera_ray_bundle.get_row_major_sliced_ray_bundle(start_idx, end_idx)
             #print("OUTTTIEEE: {}".format(ray_bundle.shape))
+            #print(camera_ray_bundle.shape)
+            #exit(-1)
             #print("OUTTTIEEE SHAPPPEEE: {}".format(ray_bundle.origins.shape))
             outputs = self.forward(ray_bundle=ray_bundle)
-            print(outputs['rgb'].shape)
-            exit(-1)
+            #print(outputs['rgb'].shape)
+            #exit(-1)
             for output_name, output in outputs.items():  # type: ignore
                 if not torch.is_tensor(output):
                     # TODO: handle lists of tensors as well
