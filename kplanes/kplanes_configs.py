@@ -118,10 +118,10 @@ kplanes_olddynamic_method = MethodSpecification(
 kplanes_dynamic_method = MethodSpecification(
     config=TrainerConfig(
         method_name="kplanes-dynamic",
-        steps_per_eval_batch=200001,
+        steps_per_eval_batch=100001,
         steps_per_save=200,
-        steps_per_eval_all_images=200000,
-        max_num_iterations=200001,
+        steps_per_eval_all_images=100000,
+        max_num_iterations=100001,
         mixed_precision=True,
         pipeline=VanillaPipelineConfig(
             datamanager=VanillaDataManagerConfig(
@@ -162,11 +162,11 @@ kplanes_dynamic_method = MethodSpecification(
         optimizers={
             "proposal_networks": {
                 "optimizer": AdamOptimizerConfig(lr=1e-3, eps=1e-12),
-                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=200000),
+                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=100000),
             },
             "fields": {
                 "optimizer": AdamOptimizerConfig(lr=1e-3, eps=1e-12),
-                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=200000),
+                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=100000),
             },
             #"pose_delts": {
             #    "optimizer": AdamOptimizerConfig(lr=1e-6, eps=1e-12),
