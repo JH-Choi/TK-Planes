@@ -235,7 +235,8 @@ class KPlanesModel(Model):
         #)
         
         self.img_save_counter = 0
-        self.vol_tvs = None
+        #self.vol_tvs = None
+        self.vol_tvs = []
         self.cosine_idx = 0
         self.vol_tv_mult = 0.0001
         self.conv_vol_tv_mult = 0.0001
@@ -485,7 +486,7 @@ class KPlanesModel(Model):
         '''
         weights_list = []
         ray_samples_list = []
-        self.vol_tvs = []
+        #self.vol_tvs = []
         num_samps = self.config.num_samples*4 # 2**2 for three stages
         feat_dim = self.start_feat_dim // 2
         curr_dim = [self.final_dim[0] // 2, self.final_dim[1] // 2]
@@ -504,9 +505,9 @@ class KPlanesModel(Model):
         else:
             ray_stuffs = ray_stuffs.unsqueeze(0).permute(0,3,1,2)
         '''
-        curr_dim_delts = [4,4,4]
+        #curr_dim_delts = [4,4,4]
         #curr_dim_delts = [4,6,7]        
-        #curr_dim_delts = [8,8,8]
+        curr_dim_delts = [8,8,8]
         dim_adder = 0
         #curr_dim_delts = [2,5,7]                
         #curr_dim_delts = [0,0,0]
@@ -695,6 +696,7 @@ class KPlanesModel(Model):
             loss_dict = misc.scale_dict(loss_dict, self.config.loss_coefficients)
 
             outputs_lst = self.vol_tvs
+            self.vol_tvs = []
             vol_tvs = 0.0
             time_mask_loss = 0.0
             #time_mask_alt = image_mask_bool.unsqueeze(-1).expand(-1,10,-1)

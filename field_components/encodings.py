@@ -658,16 +658,18 @@ class KPlanesEncoding(Encoding):
         self.feature_coefs.append(nn.Parameter(torch.empty([self.select_dim[0], self.num_components])))
         self.feature_coefs.append(nn.Parameter(torch.empty([self.select_dim[1], self.num_components])))                
         self.feature_coefs = nn.ParameterList(self.feature_coefs)
-        nn.init.normal_(self.feature_coefs[0], 0, 0.1)
-        nn.init.normal_(self.feature_coefs[1], 0, 0.1)
+        nn.init.normal_(self.feature_coefs[0], 0, 0.5)
+        nn.init.normal_(self.feature_coefs[1], 0, 0.5)
         self.feature_softmax_layer = nn.Softmax(dim=1)
         #self.feature_coefs = nn.ParameterList()        
         #self.coo_combs = [(0,1),(0,2),(1,2), (0,1),(0,3),(1,3), (0,2),(0,3),(2,3), (1,2),(1,3),(2,3)]
 
         for coo_idx,coo_comb in enumerate(self.coo_combs):
 
-            if 3 in coo_comb or coo_idx >= 6:
-                num_comps = self.select_dim[1]                
+            if 3 in coo_comb:
+                num_comps = self.select_dim[1]*self.num_components
+            elif coo_idx >= 6:
+                num_comps = self.select_dim[1]
             else:
                 num_comps = self.select_dim[0]
                 
@@ -684,7 +686,7 @@ class KPlanesEncoding(Encoding):
                 #with torch.no_grad():
                 #    new_plane_coef = new_plane_coef*100
                 #nn.init.uniform_(new_plane_coef, a=init_a, b=init_b)
-                nn.init.uniform_(new_plane_coef, a=-5, b=-3)    
+                nn.init.uniform_(new_plane_coef, a=-0, b=1)    
             #elif coo_idx > 5:
             #    nn.init.uniform_(new_plane_coef, a=-0.1, b=0.1)
             else:
@@ -740,8 +742,10 @@ class KPlanesEncoding(Encoding):
                grid, coords, align_corners=True, padding_mode="border"
             )  # [1, output_dim, 1, flattened_bs]
 
-            if 3 in coo_comb or ci >= 6:
-                num_comps = self.select_dim[1]                
+            if 3 in coo_comb:
+                num_comps = self.select_dim[1]*self.num_components
+            elif ci >= 6:
+                num_comps = self.select_dim[1]
             else:
                 num_comps = self.select_dim[0]
                 
@@ -833,12 +837,13 @@ class KPlanesEncoding(Encoding):
         #                (selection_func(outputs[6]).unsqueeze(-1) * (self.feature_coefs[1][6].unsqueeze(0))) *
         #                (selection_func(outputs[7]).unsqueeze(-1) * (self.feature_coefs[1][7].unsqueeze(0))) *                      
         #                (selection_func(outputs[8]).unsqueeze(-1) * (self.feature_coefs[1][8].unsqueeze(0))))
-        xyz_temporal = (selection_func(outputs[2],**select_kwargs).unsqueeze(-1) * 
-                        selection_func(outputs[4],**select_kwargs).unsqueeze(-1) * 
-                        selection_func(outputs[5],**select_kwargs).unsqueeze(-1) * 
-                        selection_func(outputs[6],**select_kwargs).unsqueeze(-1) * 
-                        selection_func(outputs[7],**select_kwargs).unsqueeze(-1) * 
-                        selection_func(outputs[8],**select_kwargs).unsqueeze(-1)) * self.feature_coefs[1].unsqueeze(0)
+        #xyz_temporal_time = (selection_func(outputs[2],**select_kwargs).unsqueeze(-1) * 
+        #                     selection_func(outputs[4],**select_kwargs).unsqueeze(-1) * 
+        #                     selection_func(outputs[5],**select_kwargs).unsqueeze(-1))
+        xyz_temporal_time = (outputs[2]*outputs[4]*outputs[5])        
+        xyz_temporal_space = ((selection_func(outputs[6],**select_kwargs) * 
+                               selection_func(outputs[7],**select_kwargs) * 
+                               selection_func(outputs[8],**select_kwargs)).unsqueeze(-1)) * self.feature_coefs[1].unsqueeze(0)
 
 
 
@@ -849,7 +854,7 @@ class KPlanesEncoding(Encoding):
         #xyz_static = (xyz_static.unsqueeze(-1)) * (self.feature_coefs[0].unsqueeze(0))
         #xyz_temporal = (xyz_temporal.unsqueeze(-1)) * (self.feature_coefs[1].unsqueeze(0))        
         xyz_static = xyz_static.reshape(xyz_static.shape[0],-1)
-        xyz_temporal = xyz_temporal.reshape(xyz_temporal.shape[0],-1)
+        xyz_temporal = (xyz_temporal_space.reshape(xyz_temporal_space.shape[0],-1)) * xyz_temporal_time
 
         #output = self.proc_func(self.output_head(torch.cat([static_mask*F.normalize(xyz_static),dynamic_mask*F.normalize(xyz_temporal),
         #output = self.proc_func(self.output_head(torch.cat([F.normalize(xyz_static),F.normalize(xyz_temporal),

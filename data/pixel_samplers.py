@@ -451,9 +451,9 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
         num_images = self.num_to_select
         curr_dim = self.patch_size# // 2
         #self.init_dim = curr_dim
-        self.curr_dim_delts = [0,4,4,4]
+        #self.curr_dim_delts = [0,4,4,4]
         #self.curr_dim_delts = [0,4,6,7]        
-        #self.curr_dim_delts = [0,8,8,8]
+        self.curr_dim_delts = [0,8,8,8]
         #self.curr_dim_delts = [0,2,5,7]        
         
         #self.curr_dwh_delts = [0,2,3,3.5]
@@ -625,7 +625,7 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
                 self.dh_lst = self.dh_lst[:,self.reorder]
 
             dynamo = 0
-            if random.random() < 0.33:
+            if random.random() < 0.4:
                 dw = self.dw_lst[:,0]
                 dh = self.dh_lst[:,0]
                 curr_centers = self.centers[curr_select_idxs[0]]
@@ -633,7 +633,7 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
                     curr_x = int(curr_center[0] * 1280)
                     curr_y = int(curr_center[1] * 720)
                     if (curr_x >= (dw - 10) and curr_x <= (dw + self.patch_size[1] + 10) and
-                        curr_y >= (dh - 10) and curr_y <= (dh + self.patch_size[0] + 10)):
+                        curr_y >= (dh - 50) and curr_y <= (dh + self.patch_size[0] + 50)):
                         dynamo = 1
                 self.dw_lst = self.dw_lst[:,1:]
                 self.dh_lst = self.dh_lst[:,1:]
@@ -641,8 +641,8 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
                 dynamo = 1
                 curr_centers = self.centers[curr_select_idxs[0]]
                 curr_center = curr_centers[random.randint(0,len(curr_centers)-1)]
-                dw = int(curr_center[0] * 1280) - random.randint(0,self.patch_size[1]-1)                
-                dh = int(curr_center[1] * 720) - random.randint(0,self.patch_size[0]-1)
+                dw = int(curr_center[0] * 1280) - random.randint(10,self.patch_size[1]-10)                
+                dh = int(curr_center[1] * 720) - random.randint(50,self.patch_size[0]-50)
                 dw = min(max(0,dw),1280 - self.patch_size[1] - 1)
                 dh = min(max(0,dh),720 - self.patch_size[0] - 1)
                 dw = torch.tensor([dw],device=self.dw_lst.device)

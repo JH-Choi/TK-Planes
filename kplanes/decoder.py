@@ -128,7 +128,7 @@ class UpConv(nn.Module):
         #self.norm1 = nn.LayerNorm([self.in_channels,curr_dim,curr_dim],elementwise_affine=True)
         #self.norm1 = torch.nn.Identity()
         #curr_dim *= 2
-        self.process_static = nn.Sequential(nn.InstanceNorm2d(curr_channels_s,affine=True),
+        self.process_static = nn.Sequential(#nn.InstanceNorm2d(curr_channels_s,affine=True),
                                             conv3x3(curr_channels_s, 2*curr_channels_s),
                                             self.relu,
                                             #nn.InstanceNorm2d(2*curr_channels_s,affine=True),
@@ -137,11 +137,11 @@ class UpConv(nn.Module):
                                             #nn.InstanceNorm2d(2*curr_channels_s,affine=True),
                                             #conv3x3(2*curr_channels_s, 2*curr_channels_s),
                                             #self.relu,                                            
-                                            nn.InstanceNorm2d(2*curr_channels_s,affine=True),
-                                            conv1x1(2*curr_channels_s, self.out_channels[0]),
+                                            #nn.InstanceNorm2d(2*curr_channels_s,affine=True),
+                                            conv3x3(2*curr_channels_s, self.out_channels[0]),
                                             self.relu)
 
-        self.process_dynamic = nn.Sequential(nn.InstanceNorm2d(curr_channels_d,affine=True),
+        self.process_dynamic = nn.Sequential(#nn.InstanceNorm2d(curr_channels_d,affine=True),
                                             conv3x3(curr_channels_d, 2*curr_channels_d),
                                             self.relu,
                                             #nn.InstanceNorm2d(2*curr_channels_d,affine=True),
@@ -150,8 +150,8 @@ class UpConv(nn.Module):
                                             #nn.InstanceNorm2d(2*curr_channels_d,affine=True),
                                             #conv3x3(2*curr_channels_d, 2*curr_channels_d),
                                             #self.relu,                                             
-                                            nn.InstanceNorm2d(2*curr_channels_d,affine=True),
-                                            conv1x1(2*curr_channels_d, self.out_channels[1]),
+                                            #nn.InstanceNorm2d(2*curr_channels_d,affine=True),
+                                            conv3x3(2*curr_channels_d, self.out_channels[1]),
                                             self.relu)
         
         ##self.norm2 = nn.InstanceNorm2d(curr_channels,affine=True)
@@ -180,20 +180,20 @@ class UpConv(nn.Module):
             curr_out_channels = self.out_channels[0] + self.out_channels[1]
             self.conv_final = nn.Sequential(#nn.InstanceNorm2d(self.out_channels),
                                             #conv5x5(curr_out_channels, curr_out_channels // 2, padding=0),
-                                            conv3x3(curr_out_channels, curr_out_channels * 2),                
+                                            conv3x3(curr_out_channels, curr_out_channels * 4),                
                                             #nn.InstanceNorm2d(self.out_channels // 2),
                                             nn.LeakyReLU(0.02),
                                             #nn.InstanceNorm2d(self.out_channels // 2),
                                             #conv5x5(curr_out_channels // 2, curr_out_channels // 4, padding=0),
-                                            conv3x3(curr_out_channels * 2, curr_out_channels * 2),                
+                                            conv3x3(curr_out_channels * 4, curr_out_channels),                
                                             nn.LeakyReLU(0.02),
-                                            conv1x1(curr_out_channels * 2, curr_out_channels // 4),                
+                                            conv3x3(curr_out_channels, curr_out_channels // 4),                
                                             nn.LeakyReLU(0.02),                
                                             #nn.InstanceNorm2d(self.out_channels // 4),                                            
                                             #conv3x3(curr_out_channels // 4, curr_out_channels // 8, padding=0),
                                             #nn.LeakyReLU(0.02),
                                             #nn.InstanceNorm2d(self.out_channels // 8),                                            
-                                            conv1x1(curr_out_channels // 4, 3),
+                                            conv3x3(curr_out_channels // 4, 3),
                                             #nn.InstanceNorm2d(3),
                                             #nn.Tanh())
                                             nn.Sigmoid()
