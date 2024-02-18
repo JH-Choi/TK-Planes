@@ -468,7 +468,7 @@ class KPlanesModel(Model):
         #image_diff = torch.abs(image - outputs["rgb"].detach()).mean(1).unsqueeze(-1)#[non_zero_idxs]
 
         mask_image = mask_image / 255.
-        image = image*(1 - image_mask_bool) + mask_image*image_mask_bool
+        #image = image*(1 - image_mask_bool) + mask_image*image_mask_bool
         #image = (1 - image_mask) + red_image*image_mask        
         loss_dict = {"rgb": self.rgb_loss(image, outputs["rgb"])}
         #loss_dict = {"rgb": self.rgb_loss(self.field.masks*image, outputs["rgb"])}        

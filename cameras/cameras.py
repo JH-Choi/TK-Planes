@@ -601,6 +601,8 @@ class Cameras(TensorDataclass):
         # Get all our focal lengths, principal points and make sure they are the right shapes
         y = coords[..., 0]  # (num_rays,) get rid of the last dimension
         x = coords[..., 1]  # (num_rays,) get rid of the last dimension
+        self.fx[:,:] = 801.3665
+        self.fy[:,:] = 835.0484
         fx, fy = self.fx[true_indices].squeeze(-1), self.fy[true_indices].squeeze(-1)  # (num_rays,)
         cx, cy = self.cx[true_indices].squeeze(-1), self.cy[true_indices].squeeze(-1)  # (num_rays,)
         assert (
