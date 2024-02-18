@@ -177,11 +177,12 @@ class KPlanesField(Field):
                 n_input_dims=self.feature_dim,
                 n_output_dims=self.geo_feat_dim + 1,
                 network_config={
-                    "otype": "CutlassMLP", #"FullyFusedMLP",
+                    "otype": "FullyFusedMLP",
+                    #"otype": "CutlassMLP",
                     "activation": "ReLU",
                     "output_activation": "None",
                     "n_neurons": 64, #64
-                    "n_hidden_layers": 2, #1
+                    "n_hidden_layers": 1, #1
                 },
             )
             self.direction_encoding = tcnn.Encoding(
@@ -194,15 +195,17 @@ class KPlanesField(Field):
             in_dim_color = (
                 self.direction_encoding.n_output_dims + self.geo_feat_dim + self.appearance_embedding_dim
             )
+
             self.color_net = tcnn.Network(
                 n_input_dims=in_dim_color,
                 n_output_dims=3,
                 network_config={
-                    "otype": "CutlassMLP", #"FullyFusedMLP",
+                    "otype": "FullyFusedMLP",
+                    #"otype": "CutlassMLP", 
                     "activation": "ReLU",
                     "output_activation": "Sigmoid",
                     "n_neurons": 64, #64
-                    "n_hidden_layers": 3, #2
+                    "n_hidden_layers": 2, #2
                 },
             )
 
