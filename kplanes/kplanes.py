@@ -748,7 +748,7 @@ class KPlanesModel(Model):
             #loss_dict["camera_delts"] += (torch.abs(self.pos_diff[non_zero_idxs])*image_diff).mean()
             #loss_dict["camera_delts"] = (torch.abs(self.rot_angs*image_diff)).mean()
             #loss_dict["camera_delts"] += (torch.abs(self.pos_diff*image_diff)).mean()
-            loss_dict["local_vol_tvs"] = 0.1*local_vol_tvs / len(outputs_lst)
+            loss_dict["local_vol_tvs"] = 0.01*local_vol_tvs / len(outputs_lst)
             #loss_dict["grid_norm"] = 0.01*grid_norm / (6*len(outputs_lst))
             
             #loss_dict["time_masks"] = time_mask_loss
