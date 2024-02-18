@@ -129,7 +129,7 @@ kplanes_dynamic_method = MethodSpecification(
                 #dataparser=DNeRFDataParserConfig(),                                
                 train_num_rays_per_batch=4196 + 1024,
                 eval_num_rays_per_batch=256,
-                camera_res_scale_factor=1,  # DNeRF train on 400x400
+                camera_res_scale_factor=0.5,  # DNeRF train on 400x400
             ),
             model=KPlanesModelConfig(
                 eval_num_rays_per_chunk=1 << 15,

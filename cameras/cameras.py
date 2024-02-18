@@ -425,9 +425,9 @@ class Cameras(TensorDataclass):
         # is None. In this case we append (h, w) to the num_rays dimensions for all tensors. In this case,
         # each image in camera_indices has to have the same shape since otherwise we would have error'd when
         # we checked keep_shape is valid or we aren't jagged.
-        booly = False
+        self.booly = False
         if coords is None:
-            booly = True
+            self.booly = True
             index_dim = camera_indices.shape[-1]
             index = camera_indices.reshape(-1, index_dim)[0]
             old_height = self.height
@@ -601,8 +601,11 @@ class Cameras(TensorDataclass):
         # Get all our focal lengths, principal points and make sure they are the right shapes
         y = coords[..., 0]  # (num_rays,) get rid of the last dimension
         x = coords[..., 1]  # (num_rays,) get rid of the last dimension
-        self.fx[:,:] = 801.3665
-        self.fy[:,:] = 835.0484
+
+        if self.booly:
+            self.fx[:,:] = 801.3665 
+            self.fy[:,:] = 835.0484
+
         fx, fy = self.fx[true_indices].squeeze(-1), self.fy[true_indices].squeeze(-1)  # (num_rays,)
         cx, cy = self.cx[true_indices].squeeze(-1), self.cy[true_indices].squeeze(-1)  # (num_rays,)
         assert (
