@@ -191,7 +191,7 @@ class Model(nn.Module):
         #height_chunks = 240        
         num_heights = actual_height // height_chunks
         #num_heights += (num_heights - 1)
-        ogg_width_chunks = 128
+        ogg_width_chunks = 160
         width_chunks = ogg_width_chunks
         #width_chunks = 320
         num_widths = actual_width // width_chunks

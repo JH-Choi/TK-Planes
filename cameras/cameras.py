@@ -446,7 +446,7 @@ class Cameras(TensorDataclass):
             #dwh_delts = [0,0,0,0]
             dim_adder = 0
             patch_height = 144 + dim_adder
-            patch_width = 128 + dim_adder
+            patch_width = 160 + dim_adder
             booly = True
             index_dim = camera_indices.shape[-1]
             index = camera_indices.reshape(-1, index_dim)[0]

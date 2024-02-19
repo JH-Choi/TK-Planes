@@ -738,9 +738,17 @@ class KPlanesEncoding(Encoding):
             #    grid = self.time_freq_conv[0](grid) + grid
             #    grid = torch.fft.ifft2(grid).type(grid_type)
             coords = in_tensor[..., coo_comb].view(1, 1, -1, 2)  # [1, 1, flattened_bs, 2]
+            #if 3 in coo_comb:
+            #    print(coords.shape)
+            #    print(in_tensor.shape)
+            #    print(self.coo_combs)
+            #    print(coo_comb)
+
             interp = F.grid_sample(
                grid, coords, align_corners=True, padding_mode="border"
             )  # [1, output_dim, 1, flattened_bs]
+            #if 3 in coo_comb:
+            #    print(interp.shape)
 
             if 3 in coo_comb:
                 num_comps = self.select_dim[1]*self.num_components
@@ -751,6 +759,9 @@ class KPlanesEncoding(Encoding):
                 
             interp = interp.view(num_comps, -1).T  # [flattened_bs, output_dim]
 
+            #if 3 in coo_comb:
+            #    print(interp.shape)            
+            #    exit(-1)
 
             #interp = torch.sigmoid(interp.unsqueeze(-1)) * self.feature_coefs[ci].unsqueeze(0)
             #interp = torch.tanh(interp.unsqueeze(-1)) * self.feature_coefs[ci].unsqueeze(0)            
@@ -844,8 +855,6 @@ class KPlanesEncoding(Encoding):
         xyz_temporal_space = ((selection_func(outputs[6],**select_kwargs) * 
                                selection_func(outputs[7],**select_kwargs) * 
                                selection_func(outputs[8],**select_kwargs)).unsqueeze(-1)) * self.feature_coefs[1].unsqueeze(0)
-
-
 
         #xyz_static = torch.sigmoid(xyz_static)
         #xyz_temporal = torch.sigmoid(xyz_temporal)
