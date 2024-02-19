@@ -471,6 +471,34 @@ class KPlanesModel(Model):
         #ray_bundles[0].directions = new_dirs
         #ray_bundles[0].origins = ray_bundles[0].origins + cam_delts[0].squeeze()
 
+        
+        field_grids = []
+        for field in self.fields:
+            for g in field.grids:
+                field_grids.append(g.plane_coefs)
+        '''
+        grid_nums = [2,4,5]
+        for coef_idx,coef_grid in enumerate(field_grids):
+            curr_grids = []
+            for grid_num in grid_nums:
+                curr_grids.append(coef_grid[grid_num].detach().cpu().numpy())
+            
+            for gidx, curr_grid in enumerate(curr_grids):
+                grid_min = np.min(curr_grid)
+                grid_max = np.max(curr_grid)
+                curr_grid = 255 * ((curr_grid - grid_min) / (grid_max - grid_min))
+                curr_grid = curr_grid.astype(np.uint8)
+                new_grid = np.zeros((curr_grid.shape[0] * curr_grid.shape[2] + (curr_grid.shape[2] - 1)*5,curr_grid.shape[1]))
+                for ngidx in range(curr_grid.shape[2]):
+                    new_grid[ngidx * (curr_grid.shape[0] + 5):(ngidx * (curr_grid.shape[0] + 5)) + curr_grid.shape[0]] = curr_grid[:,:,ngidx]
+                
+                #sub_grid = cv2.putText(sub_grid,"{},{}".format("%0.3f"%sub_grid_min,"%0.3f"%sub_grid_max),(20,30),
+                #                       cv2.FONT_HERSHEY_SIMPLEX,0.55,(0,0,0),2)                                                                                        
+                cv2.imwrite("/home/cmaxey/grid_imgs/grid_{}_{}.png".format(coef_idx,grid_nums[gidx]),new_grid)
+
+        exit(-1)
+        '''
+        
         '''
         field_grids = []
         for field in self.fields:
@@ -512,8 +540,8 @@ class KPlanesModel(Model):
         #curr_dim_delts = [2,5,7]                
         #curr_dim_delts = [0,0,0]
         dynamo = 1
-        if "dynamo" in ray_bundles[0].metadata:
-            dynamo = ray_bundles[0].metadata["dynamo"]
+        #if "dynamo" in ray_bundles[0].metadata:
+        #    dynamo = ray_bundles[0].metadata["dynamo"]
         for rbidx,ray_bundle in enumerate(ray_bundles[1:]):
 
             #ray_stuffs = self.ray_bundle_encoder[rbidx](ray_stuffs) + self.ray_bundle_encoder_avg[rbidx](ray_stuffs)
