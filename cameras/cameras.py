@@ -453,7 +453,8 @@ class Cameras(TensorDataclass):
 
             orig_height = self.height.clone()
             orig_width = self.width.clone()
-
+            height_mult = 720 / patch_height
+            width_mult = 1280 / patch_width
             self.height[:] = patch_height
             self.width[:] = patch_width
             
@@ -470,8 +471,8 @@ class Cameras(TensorDataclass):
                     curr_ymax = torch.max(coords[:,:,0])                
                     curr_xmax = torch.max(coords[:,:,1])
                     #print((coords / 400) * 720)
-                    c_h = (patch_height / curr_ray_mult) * 5
-                    c_w = (patch_width  / curr_ray_mult) * 5
+                    c_h = (patch_height / curr_ray_mult) * height_mult
+                    c_w = (patch_width  / curr_ray_mult) * width_mult
                     coords = coords - (dim_delts[midx] / 2)                    
                     #c_h = ((patch_height / curr_ray_mult) - curr_ray_mult + 1) * 5
                     #c_w = ((patch_width  / curr_ray_mult) - curr_ray_mult + 1) * 5                    

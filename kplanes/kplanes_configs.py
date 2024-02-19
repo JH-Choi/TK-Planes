@@ -163,11 +163,11 @@ kplanes_dynamic_method = MethodSpecification(
                 loss_coefficients={
                     "interlevel": 1.0,
                     "distortion": 0.01,
-                    "plane_tv": 0.01,
+                    "plane_tv": 0.1,
                     "plane_tv_proposal_net": 0.0001,
                     "l1_time_planes": 0.01,
                     "l1_time_planes_proposal_net": 0.001,
-                    "time_smoothness": 0.01,
+                    "time_smoothness": 0.1,
                     "time_smoothness_proposal_net": 0.0001,
                 },
             ),
@@ -178,11 +178,11 @@ kplanes_dynamic_method = MethodSpecification(
             #    "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=100000),
             #},
             "fields": {
-                "optimizer": AdamOptimizerConfig(lr=1e-4, eps=1e-12),
+                "optimizer": AdamOptimizerConfig(lr=3e-4, eps=1e-12),
                 "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=200000),
             },
             "decoder": {
-                "optimizer": AdamOptimizerConfig(lr=1e-4, eps=1e-12),
+                "optimizer": AdamOptimizerConfig(lr=3e-4, eps=1e-12),
                 "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=200000),
             },
             #"ray_bundle_encoder": {

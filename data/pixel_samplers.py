@@ -460,22 +460,25 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
         #self.curr_dim_delts = [0,0,0,0]
         #self.curr_dwh_delts = [0,0,0,0]        
 
+        self.height_mult = self.actual_height / curr_dim[0]
+        self.width_mult = self.actual_width / curr_dim[1]
+
         idx_mult = 1
         self.dim_adder = 0
         for idx in range(4):
             curr_dim_0 = curr_dim[0] 
             curr_dim_1 = curr_dim[1] 
 
-            c_h = curr_dim_0 * 5
-            c_w = curr_dim_1 * 5
+            c_h = curr_dim_0 * self.height_mult
+            c_w = curr_dim_1 * self.width_mult
             #c_h = (curr_dim_0 + 1 - 2**idx) * 5
             #c_w = (curr_dim_1 + 1 - 2**idx) * 5            
 
             curr_dim_0 += self.curr_dim_delts[idx]
             curr_dim_1 += self.curr_dim_delts[idx]
 
-            #c_h = curr_dim_0 * 5
-            #c_w = curr_dim_1 * 5
+            #c_h = curr_dim_0 * self.height_mult
+            #c_w = curr_dim_1 * self.width_mult
             
             #curr_dim_0 += int((self.dim_adder / (2**idx)))
             #curr_dim_1 += int((self.dim_adder / (2**idx)))
