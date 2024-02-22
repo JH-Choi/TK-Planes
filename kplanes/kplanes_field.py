@@ -104,7 +104,7 @@ class KPlanesField(Field):
         concat_across_scales: bool = True,  # TODO: Maybe this should be removed
         grid_base_resolution: Sequence[int] = (128, 128, 128),
         grid_feature_dim: int = 32,
-            grid_select_dim: List[int] = [64,32],
+            grid_select_dim: int = 64,
         multiscale_res: Sequence[int] = (1, 2, 4),
         spatial_distortion: Optional[SpatialDistortion] = None,
         appearance_embedding_dim: int = 0,
@@ -112,13 +112,12 @@ class KPlanesField(Field):
         linear_decoder: bool = False,
         linear_decoder_layers: Optional[int] = None,
     ) -> None:
-
         super().__init__()
 
         self.register_buffer("aabb", aabb)
         self.num_images = num_images
         self.grid_select_dim = grid_select_dim
-        self.geo_feat_dim = (grid_feature_dim * (self.grid_select_dim[0] + self.grid_select_dim[1]) // 2) #- 1 #geo_feat_dim
+        self.geo_feat_dim = (grid_feature_dim * (self.grid_select_dim) // 2) #- 1 #geo_feat_dim
         self.grid_base_resolution = list(grid_base_resolution)
         self.concat_across_scales = concat_across_scales
         self.spatial_distortion = spatial_distortion
@@ -134,8 +133,8 @@ class KPlanesField(Field):
             resolution = [r * res for r in self.grid_base_resolution[:3]] + self.grid_base_resolution[3:]
             self.grids.append(KPlanesEncoding(resolution, grid_feature_dim, grid_select_dim))
         self.feature_dim = (
-            grid_feature_dim * (self.grid_select_dim[0] + self.grid_select_dim[1]) * len(multiscale_res) if self.concat_across_scales
-            else grid_feature_dim * (self.grid_select_dim[0] + self.grid_select_dim[1])
+            grid_feature_dim * (self.grid_select_dim) * len(multiscale_res) if self.concat_across_scales
+            else grid_feature_dim * (self.grid_select_dim)
         )
 
         # Init appearance code-related parameters

@@ -621,7 +621,7 @@ class KPlanesEncoding(Encoding):
         self,
         resolution: Sequence[int] = (128, 128, 128),
         num_components: int = 64,
-            select_dim: List[int] = [64,32],
+            select_dim: int = 64,
         init_a: float = 0.1,
         init_b: float = 0.5,
         reduce: Literal["sum", "product"] = "product",
@@ -650,16 +650,16 @@ class KPlanesEncoding(Encoding):
         # Dynamic models (in_dim == 4) will have 6 planes:
         # (y, x), (z, x), (t, x), (z, y), (t, y), (t, z)
         # static models (in_dim == 3) will only have the 1st, 2nd and 4th planes.
-        self.coo_combs = [(0,1),(0,2),(0,3), (1,2),(1,3),(2,3), (0,1),(0,2),(1,2)]        
+        self.coo_combs = [(0,1),(0,2),(0,3), (1,2),(1,3),(2,3)]
         self.plane_coefs = nn.ParameterList()
         self.feature_coefs = []
         #self.feature_coefs.append(nn.Parameter(torch.empty([len(self.coo_combs),self.select_dim[0], self.num_components])))
         #self.feature_coefs.append(nn.Parameter(torch.empty([len(self.coo_combs),self.select_dim[1], self.num_components])))
-        self.feature_coefs.append(nn.Parameter(torch.empty([self.select_dim[0], self.num_components])))
-        self.feature_coefs.append(nn.Parameter(torch.empty([self.select_dim[1], self.num_components])))                
+        self.feature_coefs.append(nn.Parameter(torch.empty([self.select_dim, self.num_components])))
+
         self.feature_coefs = nn.ParameterList(self.feature_coefs)
         nn.init.normal_(self.feature_coefs[0], 0, 0.5)
-        nn.init.normal_(self.feature_coefs[1], 0, 0.5)
+
         #self.og_static = self.feature_coefs[0].clone().detach()
         #self.og_dynamic = self.feature_coefs[1].clone().detach()
         #print(self.feature_coefs[0])
@@ -671,11 +671,9 @@ class KPlanesEncoding(Encoding):
         for coo_idx,coo_comb in enumerate(self.coo_combs):
 
             if 3 in coo_comb:
-                num_comps = self.select_dim[1]*self.num_components
-            elif coo_idx >= 6:
-                num_comps = self.select_dim[1]
+                num_comps = self.select_dim#*self.num_components
             else:
-                num_comps = self.select_dim[0]
+                num_comps = self.select_dim
                 
             new_plane_coef = nn.Parameter(
                 torch.empty([num_comps] + [self.resolution[cc] for cc in coo_comb[::-1]])
@@ -702,7 +700,7 @@ class KPlanesEncoding(Encoding):
 
         bias_bool = False
 
-        total_comps = (self.select_dim[0] + self.select_dim[1])* self.num_components
+        total_comps = (self.select_dim)* self.num_components
         out_comps = total_comps
 
         self.output_head = nn.Identity()
@@ -756,11 +754,9 @@ class KPlanesEncoding(Encoding):
             #    print(interp.shape)
 
             if 3 in coo_comb:
-                num_comps = self.select_dim[1]*self.num_components
-            elif ci >= 6:
-                num_comps = self.select_dim[1]
+                num_comps = self.select_dim#*self.num_components
             else:
-                num_comps = self.select_dim[0]
+                num_comps = self.select_dim
                 
             interp = interp.view(num_comps, -1).T  # [flattened_bs, output_dim]
 
@@ -794,37 +790,6 @@ class KPlanesEncoding(Encoding):
 
         vol_tv = 0.0
 
-        if False and self.print_idx % 1000 == 0: # and self.plane_coefs[0].shape[0] > 16 and self.plane_coefs[0].shape[-1] >= 256:
-            for idx in [0,1,2,3,4,5,6,7,8]:
-                grid = self.plane_coefs[idx].detach().cpu().numpy()
-                sub_grid_min = np.min(grid)
-                sub_grid_max = np.max(grid)                    
-                for jdx in range(grid.shape[0]):
-                    sub_grid = grid[jdx]
-                    sub_grid = 255 * (sub_grid - sub_grid_min) / (sub_grid_max - sub_grid_min)
-                    reso_x,reso_y = sub_grid.shape
-                    sub_grid = sub_grid.astype(np.uint8)
-                    #sub_grid = cv2.putText(sub_grid,"{},{}".format("%0.3f"%sub_grid_min,"%0.3f"%sub_grid_max),(20,30),
-                    #                       cv2.FONT_HERSHEY_SIMPLEX,0.55,(0,0,0),2)
-                    cv2.imwrite("/home/cmaxey/grid_imgs/sub_grid_{}_{}_{}x{}.png".format(idx,jdx,reso_x,reso_y),sub_grid)
-
-            '''
-            for idx,kdx,ldx in [(2,4,6),(2,5,7),(4,5,8)]:
-                grid1 = self.plane_coefs[idx].detach().cpu()#[:-1]
-                grid2 = self.plane_coefs[kdx].detach().cpu()#[:-1]
-                grid3 = self.plane_coefs[ldx].detach().cpu()
-                grid = (torch.matmul(grid2.transpose(-1,-2),grid1) * grid3).numpy()
-                sub_grid_min = np.min(grid)
-                sub_grid_max = np.max(grid)                    
-                for jdx in range(grid.shape[0]):
-                    sub_grid = grid[jdx]
-                    sub_grid = 255 * (sub_grid - sub_grid_min) / (sub_grid_max - sub_grid_min)
-                    reso_x,reso_y = sub_grid.shape
-                    sub_grid = sub_grid.astype(np.uint8)
-                    #sub_grid = cv2.putText(sub_grid,"{},{}".format("%0.3f"%sub_grid_min,"%0.3f"%sub_grid_max),(20,30),
-                    #                       cv2.FONT_HERSHEY_SIMPLEX,0.55,(0,0,0),2)
-                    cv2.imwrite("/home/cmaxey/grid_imgs/sub_grid_{}{}_{}_{}x{}.png".format(idx,kdx,jdx,reso_x,reso_y),sub_grid)                        
-            '''
         self.print_idx = (self.print_idx + 1) % 1000
 
         #xyz_static = outputs[0]*outputs[1]*outputs[3]
@@ -838,14 +803,10 @@ class KPlanesEncoding(Encoding):
         #test_vec = torch.ones_like(self.feature_coefs[0][0])
         #test_vec[-5] = 0
 
-        #xyz_static = ((selection_func(outputs[0]).unsqueeze(-1) * (self.feature_coefs[0][0].unsqueeze(0))) *
-        #              (selection_func(outputs[1]).unsqueeze(-1) * (self.feature_coefs[0][1].unsqueeze(0))) *
-        #              (selection_func(outputs[3]).unsqueeze(-1) * (self.feature_coefs[0][3].unsqueeze(0))))
-        xyz_static = ((selection_func(outputs[0],**select_kwargs) * 
-                       selection_func(outputs[1],**select_kwargs) * 
-                       selection_func(outputs[3],**select_kwargs)).unsqueeze(-1)) * self.feature_coefs[0].unsqueeze(0)
+        xyz_static = (outputs[0] * outputs[1] * outputs[3])
+        #               selection_func(outputs[1],**select_kwargs) * 
+        #               selection_func(outputs[3],**select_kwargs)).unsqueeze(-1)) * self.feature_coefs[0].unsqueeze(0)
         #xyz_static = (selection_func(outputs[0]*outputs[1]*outputs[3],**select_kwargs).unsqueeze(-1)) * (self.feature_coefs[0].unsqueeze(0))
-        #xyz_static = xyz_static * test_vec.unsqueeze(0)
 
         '''
         if self.feature_coefs[0].shape[-1] == 32:
@@ -858,39 +819,12 @@ class KPlanesEncoding(Encoding):
             feat_coef = feat_coef.astype(np.uint8)
             cv2.imwrite("feat_coef_test.png",feat_coef)
         '''
-        #xyz_temporal = ((selection_func(outputs[2]).unsqueeze(-1) * (self.feature_coefs[1][2].unsqueeze(0))) *
-        #                (selection_func(outputs[4]).unsqueeze(-1) * (self.feature_coefs[1][4].unsqueeze(0))) *
-        #                (selection_func(outputs[5]).unsqueeze(-1) * (self.feature_coefs[1][5].unsqueeze(0))) *
-        #                (selection_func(outputs[6]).unsqueeze(-1) * (self.feature_coefs[1][6].unsqueeze(0))) *
-        #                (selection_func(outputs[7]).unsqueeze(-1) * (self.feature_coefs[1][7].unsqueeze(0))) *                      
-        #                (selection_func(outputs[8]).unsqueeze(-1) * (self.feature_coefs[1][8].unsqueeze(0))))
-        #xyz_temporal_time = (selection_func(outputs[2],**select_kwargs) * 
-        #                     selection_func(outputs[4],**select_kwargs) *
-        #                     selection_func(outputs[5],**select_kwargs))
-        xyz_temporal_time = (outputs[2]*outputs[4]*outputs[5])        
-        xyz_temporal_space = (selection_func(outputs[6],**select_kwargs) * 
-                              selection_func(outputs[7],**select_kwargs) * 
-                              selection_func(outputs[8],**select_kwargs))
-        xyz_temporal_space = (xyz_temporal_space.unsqueeze(-1)) * self.feature_coefs[1].unsqueeze(0)                
-        #xyz_temporal_space = (outputs[6]*outputs[7]*outputs[8])
-        #xyz_temporal_space = (selection_func(xyz_temporal_space,**select_kwargs).unsqueeze(-1)) * self.feature_coefs[1].unsqueeze(0)
+        xyz_temporal = (outputs[2]*outputs[4]*outputs[5])
 
-        #xyz_temporal = ((xyz_temporal_space * xyz_temporal_time).unsqueeze(-1)) * self.feature_coefs[1].unsqueeze(0)
-        
-        #xyz_static = torch.sigmoid(xyz_static)
-        #xyz_temporal = torch.sigmoid(xyz_temporal)
-        #xyz_static = torch.tanh(xyz_static)
-        #xyz_temporal = torch.tanh(xyz_temporal)
-        #xyz_static = (xyz_static.unsqueeze(-1)) * (self.feature_coefs[0].unsqueeze(0))
-        #xyz_temporal = (xyz_temporal.unsqueeze(-1)) * (self.feature_coefs[1].unsqueeze(0))        
-        xyz_static = xyz_static.reshape(xyz_static.shape[0],-1)
-        #xyz_temporal = xyz_temporal.reshape(xyz_temporal.shape[0],-1)
-        xyz_temporal = (xyz_temporal_space.reshape(xyz_temporal_space.shape[0],-1)) * xyz_temporal_time
+        xyz = (selection_func(xyz_static * xyz_temporal,**select_kwargs).unsqueeze(-1)) * (self.feature_coefs[0].unsqueeze(0))
+        xyz = xyz.reshape(xyz.shape[0],-1)
 
-        #output = self.proc_func(self.output_head(torch.cat([static_mask*F.normalize(xyz_static),dynamic_mask*F.normalize(xyz_temporal),
-        #output = self.proc_func(self.output_head(torch.cat([F.normalize(xyz_static),F.normalize(xyz_temporal),
-        #output = self.proc_func(self.output_head(torch.cat([static_mask*xyz_static,dynamic_mask*xyz_temporal,
-        output = self.proc_func(self.output_head(torch.cat([xyz_static,xyz_temporal],dim=-1)))
+        output = xyz
 
         vol_tv = self.feature_coefs
 

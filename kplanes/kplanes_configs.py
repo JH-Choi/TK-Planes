@@ -144,7 +144,7 @@ kplanes_dynamic_method = MethodSpecification(
                 #grid_base_resolution=[32, 32, 16, 77],  # time-resolution should be half the time-steps
                 grid_base_resolution=[16, 16, 16, 77],  # time-resolution should be half the time-steps                
                 grid_feature_dim=32,
-                grid_select_dim=[16,4],
+                grid_select_dim=20,
                 patch_size=[72,64],
                 #patch_size=[144,160],                
                 #patch_size=[240,256],                
@@ -168,7 +168,7 @@ kplanes_dynamic_method = MethodSpecification(
                     "distortion": 0.01,
                     "plane_tv": 0.1,
                     "plane_tv_proposal_net": 0.0001,
-                    "l1_time_planes": 0.01,
+                    "l1_time_planes": 0.001,
                     "l1_time_planes_proposal_net": 0.001,
                     "time_smoothness": 0.1,
                     "time_smoothness_proposal_net": 0.0001,

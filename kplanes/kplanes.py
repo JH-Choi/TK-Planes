@@ -86,7 +86,7 @@ class KPlanesModelConfig(ModelConfig):
     grid_feature_dim: int = 32
     """Dimension of feature vectors stored in grid."""
 
-    grid_select_dim: List[int] = field(default_factory=lambda: [64, 32])
+    grid_select_dim: int = field(default_factory=lambda: 64)
     """Dimension of feature vectors stored in grid."""    
 
     multiscale_res: List[int] = field(default_factory=lambda: [1, 2, 4])
@@ -188,7 +188,7 @@ class KPlanesModel(Model):
         # Fields
         scale = 4
         feat_dim = self.config.grid_feature_dim // 4
-        self.start_feat_dim = feat_dim * (self.config.grid_select_dim[0] + self.config.grid_select_dim[1])
+        self.start_feat_dim = feat_dim * (self.config.grid_select_dim)
         
         curr_res = [res * 4 if idx < 3 else res for idx,res in enumerate(self.config.grid_base_resolution)]
         self.patch_size = self.config.patch_size
@@ -272,12 +272,12 @@ class KPlanesModel(Model):
         
         #self.ray_bundle_encoder = torch.nn.ModuleList(self.ray_bundle_encoder)
         self.final_dim = self.config.patch_size
-        decoder_feat_dim_start = ((self.config.grid_feature_dim // 2) * self.config.grid_select_dim[0],
-                                  (self.config.grid_feature_dim // 2) * self.config.grid_select_dim[1])
+        decoder_feat_dim_start = (self.config.grid_feature_dim // 2) * self.config.grid_select_dim
 
-        self.decoder = ImageDecoder(input_dim=(self.final_dim[0] // 8,self.final_dim[1] // 8),
-                                    final_dim=(self.final_dim[0],self.final_dim[1]),
-                                    feature_dim=decoder_feat_dim_start,mode='upscale')
+        self.decoder = ImageDecoder(input_dim=self.final_dim[0] // 8,
+                                    final_dim=self.final_dim[0],
+                                    feature_dim=decoder_feat_dim_start,
+                                    mode='upscale')
         
         self.density_fns = []
         num_prop_nets = self.config.num_proposal_iterations
@@ -464,7 +464,6 @@ class KPlanesModel(Model):
         #for rb in ray_bundles:
         #    print(rb.shape)
         #exit(-1)
-
         #cam_delts = torch.tanh(self.camera_delt_limit_layer(self.camera_pose_delts))
         #cam_delts = cam_delts[:,ray_bundles[0].camera_indices]
         #cam_delts[0] = cam_delts[0]*self.camera_pose_delt_limits[0]
@@ -847,20 +846,20 @@ class KPlanesModel(Model):
                 val_mults.append(_outputs[0][0].shape[-1])
                 total_val += _outputs[0][0].shape[-1]
                 o0 = torch.nn.functional.normalize(_outputs[0][0],p=2,dim=1)
-                o1 = torch.nn.functional.normalize(_outputs[0][1],p=2,dim=1)
-                #tmp0 = torch.abs(torch.matmul(o0,o0.permute(1,0)))
+                #o1 = torch.nn.functional.normalize(_outputs[0][1],p=2,dim=1)
+                tmp0 = torch.abs(torch.matmul(o0,o0.permute(1,0)))
                 #tmp1 = torch.abs(torch.matmul(o1,o1.permute(1,0)))
-                tmp2 = torch.abs(torch.matmul(o1,o0.permute(1,0)))                                
+                #tmp2 = torch.abs(torch.matmul(o1,o0.permute(1,0)))                                
 
                 goal0 = torch.eye(o0.shape[0],device=o0.device)
-                goal1 = torch.eye(o1.shape[0],device=o1.device)                
-                #l0 = (goal0 - tmp0)**2
+                #goal1 = torch.eye(o1.shape[0],device=o1.device)                
+                l0 = (goal0 - tmp0)**2
                 #l1 = (goal1 - tmp1)**2                
-                l2 = tmp2**2
+                #l2 = tmp2**2
                 curr_local_tv = 0
-                #curr_local_tv += torch.sum(l0)
+                curr_local_tv += torch.sum(l0)
                 #curr_local_tv += torch.sum(l1)
-                curr_local_tv += torch.sum(l2)                
+                #curr_local_tv += torch.sum(l2)                
                 #local_vol_tvs_arr.append(torch.sum(l0) + torch.sum(l1) + torch.sum(l2))
                 local_vol_tvs_arr.append(curr_local_tv)
                 
@@ -890,7 +889,7 @@ class KPlanesModel(Model):
             #loss_dict["camera_delts"] += (torch.abs(self.pos_diff[non_zero_idxs])*image_diff).mean()
             #loss_dict["camera_delts"] = (torch.abs(self.rot_angs*image_diff)).mean()
             #loss_dict["camera_delts"] += (torch.abs(self.pos_diff*image_diff)).mean()
-            #loss_dict["local_vol_tvs"] = 0.1*local_vol_tvs / len(outputs_lst)
+            loss_dict["local_vol_tvs"] = 0.001*local_vol_tvs / len(outputs_lst)
             #loss_dict["grid_norm"] = 0.01*grid_norm / (6*len(outputs_lst))
             
             #loss_dict["time_masks"] = time_mask_loss
@@ -975,7 +974,7 @@ def space_tv_loss(multi_res_grids: List[torch.Tensor]) -> float:
         if len(grids) == 3:
             spatial_planes = {0, 1, 2}
         else:
-            spatial_planes = {0, 1, 3, 6, 7, 8} #3}
+            spatial_planes = {0, 1, 3} #, 6, 7, 8} #3}
 
         for grid_id, grid in enumerate(grids):
             if grid_id in spatial_planes:
@@ -997,7 +996,7 @@ def l1_time_planes(multi_res_grids: List[torch.Tensor]) -> float:
          L1 distance from the multiplicative identity (1)
     """
     #time_planes = [2, 4, 5]  # These are the spatiotemporal planes
-    time_planes = [0, 1, 2, 3, 4, 5, 6, 7, 8]  # zero for all planes, try to limit selection of features used
+    time_planes = [0, 1, 2, 3, 4, 5] #, 6, 7, 8]  # zero for all planes, try to limit selection of features used
     #time_planes = [4, 5, 7, 8, 10, 11]  # These are the spatiotemporal planes    
     total = 0.0
     num_comps = multi_res_grids[0][0].shape[0]
