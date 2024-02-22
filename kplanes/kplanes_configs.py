@@ -118,11 +118,11 @@ kplanes_olddynamic_method = MethodSpecification(
 kplanes_dynamic_method = MethodSpecification(
     config=TrainerConfig(
         method_name="kplanes-dynamic",
-        gradient_accumulation_steps=3,
-        steps_per_eval_batch=200001,
+        gradient_accumulation_steps=1,
+        steps_per_eval_batch=500001,
         steps_per_save=100,
-        steps_per_eval_all_images=200001,
-        max_num_iterations=200001,
+        steps_per_eval_all_images=500001,
+        max_num_iterations=500001,
         mixed_precision=True,
         pipeline=VanillaPipelineConfig(
             datamanager=VanillaDataManagerConfig(
@@ -134,22 +134,25 @@ kplanes_dynamic_method = MethodSpecification(
                 train_num_rays_per_batch=4196 + 1024,
                 eval_num_rays_per_batch=1,
                 camera_res_scale_factor=1.0,  
-                patch_size=[144,160],
+                patch_size=[72,64],
+                #patch_size=[144,160],                
                 #patch_size=[240,256],                
                 #patch_size=[240,320],
             ),
             model=KPlanesModelConfig(
                 eval_num_rays_per_chunk=1 << 2,
-                grid_base_resolution=[16, 16, 8, 77],  # time-resolution should be half the time-steps
-                grid_feature_dim=16,
-                grid_select_dim=[16,8],
-                patch_size=[144,160],
+                #grid_base_resolution=[32, 32, 16, 77],  # time-resolution should be half the time-steps
+                grid_base_resolution=[16, 16, 16, 77],  # time-resolution should be half the time-steps                
+                grid_feature_dim=32,
+                grid_select_dim=[16,4],
+                patch_size=[72,64],
+                #patch_size=[144,160],                
                 #patch_size=[240,256],                
                 #patch_size=[240,320], 
                 near_plane=0,
-                far_plane=40,
+                far_plane=35,
                 num_samples=6,
-                collider_params= {'far_plane': 40.0, 'near_plane': 0.0},
+                collider_params= {'far_plane': 35.0, 'near_plane': 0.0},
                 concat_features_across_scales=False,
                 multiscale_res=[1,2,4],
                 is_contracted=False,
@@ -163,11 +166,11 @@ kplanes_dynamic_method = MethodSpecification(
                 loss_coefficients={
                     "interlevel": 1.0,
                     "distortion": 0.01,
-                    "plane_tv": 0.01,
+                    "plane_tv": 0.1,
                     "plane_tv_proposal_net": 0.0001,
-                    "l1_time_planes": 0.001,
+                    "l1_time_planes": 0.01,
                     "l1_time_planes_proposal_net": 0.001,
-                    "time_smoothness": 0.01,
+                    "time_smoothness": 0.1,
                     "time_smoothness_proposal_net": 0.0001,
                 },
             ),
@@ -179,11 +182,11 @@ kplanes_dynamic_method = MethodSpecification(
             #},
             "fields": {
                 "optimizer": AdamOptimizerConfig(lr=1e-4, eps=1e-12),
-                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=200000),
+                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=500000),
             },
             "decoder": {
                 "optimizer": AdamOptimizerConfig(lr=1e-4, eps=1e-12),
-                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=200000),
+                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=500000),
             },
             #"ray_bundle_encoder": {
             #    "optimizer": AdamOptimizerConfig(lr=1e-5, eps=1e-12),

@@ -185,20 +185,30 @@ class UpConv(nn.Module):
                                             nn.LeakyReLU(0.02),
                                             #nn.InstanceNorm2d(self.out_channels // 2),
                                             #conv5x5(curr_out_channels // 2, curr_out_channels // 4, padding=0),
-                                            conv3x3(curr_out_channels * 4, curr_out_channels),                
+                                            conv3x3(curr_out_channels * 4, curr_out_channels * 4),                
                                             nn.LeakyReLU(0.02),
-                                            conv3x3(curr_out_channels, curr_out_channels // 4),                
+                                            conv3x3(curr_out_channels * 4, curr_out_channels * 4),                
                                             nn.LeakyReLU(0.02),                
                                             #nn.InstanceNorm2d(self.out_channels // 4),                                            
                                             #conv3x3(curr_out_channels // 4, curr_out_channels // 8, padding=0),
                                             #nn.LeakyReLU(0.02),
                                             #nn.InstanceNorm2d(self.out_channels // 8),                                            
-                                            conv3x3(curr_out_channels // 4, 3),
+                                            conv3x3(curr_out_channels * 4, curr_out_channels * 2),
+                                            nn.LeakyReLU(0.02))
+            dir_encoding_dims = 16
+            self.dir_render = nn.Sequential(
+                                            conv1x1((curr_out_channels * 2) + dir_encoding_dims, curr_out_channels * 4),
+                                            nn.LeakyReLU(0.02),                                
+                                            conv1x1(curr_out_channels * 4, curr_out_channels * 4),
+                                            nn.LeakyReLU(0.02),                                
+                                            conv1x1(curr_out_channels * 4, curr_out_channels),
+                                            nn.LeakyReLU(0.02),                                
+                                            conv1x1(curr_out_channels, 3),                 
                                             #nn.InstanceNorm2d(3),
                                             #nn.Tanh())
                                             nn.Sigmoid()
             )
-    def forward(self, x, dynamo):
+    def forward(self, x, dynamo, dir_encoding):
         """ Forward pass
         Arguments:
             from_down: tensor from the encoder pathway
@@ -256,19 +266,24 @@ class UpConv(nn.Module):
 
         #x_s = x_s + skip_x_s
         #x_d = x_d + skip_x_d
+
         #if self.final_layer:
-            #x_d = 0*x_d
-            #x_s = 0*x_s
-        x_d = self.limit_layer(x_d,dynamo)
+        #    x_d = self.limit_layer(x_d,dynamo)
+        #    x_s = self.limit_layer(x_s,1 - dynamo)            
+        #    x_d = dynamo*x_d
+        #    x_s = (dynamo - 1)*x_s
+        #    x_d = x_d*0
+        #    x_s = x_s*0
         x = torch.concat([x_s,x_d],dim=1)
 
         #print(x.shape)
         #print('STOP')
         
         if self.final_layer:
-            
             x = self.conv_final(x)
-            
+            x = torch.concat([x,dir_encoding],dim=1)
+            x = self.dir_render(x)
+
         return x
             
 class ImageDecoder(nn.Module):
@@ -297,7 +312,7 @@ class ImageDecoder(nn.Module):
         self.num_layers = len(self.layers)
         self.layers = nn.ModuleList(self.layers)
 
-    def forward(self,x,dynamo):
+    def forward(self,x,dynamo,dir_encoding):
         #x = self.norm0(x)
         x_lst = x
         x = x_lst[-1]
@@ -305,13 +320,15 @@ class ImageDecoder(nn.Module):
         reverse_counter = -2
         for idx,l in enumerate(self.layers):
             #print(x.shape)
-            x = l(x,dynamo)
             #print(x.shape)
             #exit(-1)
 
             if idx < self.num_layers - 1:
+                x = l(x,dynamo,None)
                 x = torch.cat([x,x_lst[reverse_counter]],dim=1)
                 reverse_counter -= 1
+            else:
+                x = l(x,dynamo,dir_encoding)
                 
         return x
     

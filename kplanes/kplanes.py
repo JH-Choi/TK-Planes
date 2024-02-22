@@ -219,6 +219,10 @@ class KPlanesModel(Model):
             curr_res = [res // 2 if idx < 3 else res for idx,res in enumerate(curr_res)]
 
         self.fields = torch.nn.ModuleList(self.fields)
+        self.first_coefs = None
+        #for n,p in self.fields[0].named_parameters():
+        #    print(n)
+            
         #exit(-1)
         #self.field = KPlanesField(
         #    self.scene_box.aabb,
@@ -471,34 +475,6 @@ class KPlanesModel(Model):
         #ray_bundles[0].directions = new_dirs
         #ray_bundles[0].origins = ray_bundles[0].origins + cam_delts[0].squeeze()
 
-        
-        field_grids = []
-        for field in self.fields:
-            for g in field.grids:
-                field_grids.append(g.plane_coefs)
-        '''
-        grid_nums = [2,4,5]
-        for coef_idx,coef_grid in enumerate(field_grids):
-            curr_grids = []
-            for grid_num in grid_nums:
-                curr_grids.append(coef_grid[grid_num].detach().cpu().numpy())
-            
-            for gidx, curr_grid in enumerate(curr_grids):
-                grid_min = np.min(curr_grid)
-                grid_max = np.max(curr_grid)
-                curr_grid = 255 * ((curr_grid - grid_min) / (grid_max - grid_min))
-                curr_grid = curr_grid.astype(np.uint8)
-                new_grid = np.zeros((curr_grid.shape[0] * curr_grid.shape[2] + (curr_grid.shape[2] - 1)*5,curr_grid.shape[1]))
-                for ngidx in range(curr_grid.shape[2]):
-                    new_grid[ngidx * (curr_grid.shape[0] + 5):(ngidx * (curr_grid.shape[0] + 5)) + curr_grid.shape[0]] = curr_grid[:,:,ngidx]
-                
-                #sub_grid = cv2.putText(sub_grid,"{},{}".format("%0.3f"%sub_grid_min,"%0.3f"%sub_grid_max),(20,30),
-                #                       cv2.FONT_HERSHEY_SIMPLEX,0.55,(0,0,0),2)                                                                                        
-                cv2.imwrite("/home/cmaxey/grid_imgs/grid_{}_{}.png".format(coef_idx,grid_nums[gidx]),new_grid)
-
-        exit(-1)
-        '''
-        
         '''
         field_grids = []
         for field in self.fields:
@@ -540,8 +516,16 @@ class KPlanesModel(Model):
         #curr_dim_delts = [2,5,7]                
         #curr_dim_delts = [0,0,0]
         dynamo = 1
-        #if "dynamo" in ray_bundles[0].metadata:
-        #    dynamo = ray_bundles[0].metadata["dynamo"]
+        if "dynamo" in ray_bundles[0].metadata:
+            dynamo = ray_bundles[0].metadata["dynamo"]
+        ray_samples = self.proposal_sampler(
+                ray_bundles[0], 1 #, density_fns=density_fns                                                                                                           
+        )
+
+        dir_encoding = self.fields[0].get_dir_encodings(ray_samples)
+        dir_encoding = dir_encoding.reshape(self.final_dim[0],self.final_dim[1],dir_encoding.shape[-1])
+        dir_encoding = dir_encoding.permute(2,0,1).unsqueeze(0).detach()
+
         for rbidx,ray_bundle in enumerate(ray_bundles[1:]):
 
             #ray_stuffs = self.ray_bundle_encoder[rbidx](ray_stuffs) + self.ray_bundle_encoder_avg[rbidx](ray_stuffs)
@@ -594,16 +578,130 @@ class KPlanesModel(Model):
             else:
                 rgb_image = rgb.reshape((1,) + orig_shape + (feat_dim,))
 
+            
             rgb_image = rgb_image.permute(0,3,1,2)
             rgb_images.append(rgb_image)
             curr_dim = [curr_dim[0] // 2, curr_dim[1] // 2]
             feat_dim = feat_dim * 2
             num_samps = num_samps // 2
 
-        reconst_image = self.decoder(rgb_images,dynamo).permute(0,2,3,1) #.unsqueeze(0)).permute(0,2,3,1)
+        reconst_image = self.decoder(rgb_images,dynamo,dir_encoding).permute(0,2,3,1) #.unsqueeze(0)).permute(0,2,3,1)
 
         #if dim_adder > 0:
         #    reconst_image = reconst_image[:,dim_adder // 2:-(dim_adder // 2),dim_adder // 2:-(dim_adder // 2)]
+
+        save_grids = True
+        save_grids = False
+        if save_grids:
+            field_grids = []
+            feat_coeffs = []
+            for field in self.fields:
+                for g in field.grids:
+                    field_grids.append(g.plane_coefs)
+                    feat_coeffs.append(g.feature_coefs)
+            grid_nums = [0,1,2,3,4,5,6,7,8]
+            for coef_idx,coef_grid in enumerate(field_grids):
+                curr_grids = []
+                for grid_num in grid_nums:
+                    curr_grids.append(coef_grid[grid_num].detach().cpu().numpy())
+                print(curr_grids[0].shape)
+                for gidx, curr_grid in enumerate(curr_grids):
+                    #print(curr_grid.shape)
+                    grid_min = -5 #np.min(curr_grid)
+                    grid_max = 5 #np.max(curr_grid)
+                    curr_grid = np.clip(curr_grid,-5,5)
+                    curr_grid = 255 * ((curr_grid - grid_min) / (grid_max - grid_min))
+                    curr_grid = curr_grid.astype(np.uint8)
+                    #new_grid = np.zeros((curr_grid.shape[0] * curr_grid.shape[2] + (curr_grid.shape[2] - 1)*5,curr_grid.shape[1]))
+                    new_grid = np.ones((curr_grid.shape[1],curr_grid.shape[0] * curr_grid.shape[2] + (curr_grid.shape[0] - 1)*5))
+                    for ngidx in range(curr_grid.shape[0]):
+                        new_grid[:,ngidx * (curr_grid.shape[2] + 5):(ngidx * (curr_grid.shape[2] + 5)) + curr_grid.shape[2]] = curr_grid[ngidx,:,:]
+                    new_grid  = (new_grid * 255).astype(np.uint8)
+                    cv2.imwrite("/home/cmaxey/grid_imgs/grid_{}_{}.png".format(coef_idx,grid_nums[gidx]),new_grid)
+
+            static_feat_vecs = []
+            dynamic_feat_vecs = []
+            static_size = 0
+            dynamic_size = 0
+            static_min = None
+            static_max = None
+            dynamic_min = None
+            dynamic_max = None
+            for odx,_outputs in enumerate(feat_coeffs):
+                static = _outputs[0].detach().cpu().numpy()
+                static_size += static.shape[-1]
+                static_feat_vecs.append(static)
+                dynamic = _outputs[1].detach().cpu().numpy()
+                dynamic_size += dynamic.shape[-1]
+                dynamic_feat_vecs.append(dynamic)
+            
+                if static_min is None:
+                    static_min = np.min(static)
+                else:
+                    static_min = min(static_min,np.min(static))
+                if static_max is None:
+                    static_max = np.max(static)
+                else:
+                    static_max = max(static_max,np.max(static))
+
+                if dynamic_min is None:
+                    dynamic_min = np.min(dynamic)
+                else:
+                    dynamic_min = min(dynamic_min,np.min(dynamic))
+                if dynamic_max is None:
+                    dynamic_max = np.max(dynamic)
+                else:
+                    dynamic_max = max(dynamic_max,np.max(dynamic))
+                
+            static_feat_np = np.zeros((static_feat_vecs[0].shape[0]*2 - 1,static_size + 3*(len(static_feat_vecs) - 1)))
+            dynamic_feat_np = np.zeros((dynamic_feat_vecs[0].shape[0]*2 - 1,dynamic_size + 3*(len(dynamic_feat_vecs) - 1)))
+            static_pos = 0
+            dynamic_pos = 0
+            print("{} + {} = {}".format(static_size,3*(len(static_feat_vecs) - 1),static_size+3*(len(static_feat_vecs) - 1)))
+            print("{} + {} = {}".format(dynamic_size,3*(len(dynamic_feat_vecs) - 1),dynamic_size+3*(len(dynamic_feat_vecs) - 1)))        
+
+            for static_vec,dynamic_vec in zip(static_feat_vecs,dynamic_feat_vecs):
+                for static_idx in range(0,static_feat_vecs[0].shape[0]*2 - 1,2):
+                    static_feat_np[static_idx:static_idx + 1,static_pos:static_pos + static_vec.shape[-1]] = (static_vec[static_idx // 2] - static_min) / (static_max - static_min)
+                static_pos += static_vec.shape[-1] + 3
+                for dynamic_idx in range(0,dynamic_feat_vecs[0].shape[0]*2 - 1,2):            
+                    dynamic_feat_np[dynamic_idx:dynamic_idx+1,dynamic_pos:dynamic_pos + dynamic_vec.shape[-1]] = (dynamic_vec[dynamic_idx // 2] - dynamic_min) / (dynamic_max - dynamic_min)
+                dynamic_pos += dynamic_vec.shape[-1] + 3
+
+                
+            static_feat_np = (static_feat_np * 255).astype(np.uint8)
+            dynamic_feat_np = (dynamic_feat_np * 255).astype(np.uint8)
+            print(static_feat_np.shape)
+            print(dynamic_feat_np.shape)
+            combo_feat_vec_np = np.zeros((static_feat_np.shape[0] + dynamic_feat_np.shape[0] + 3,static_feat_np.shape[1]),dtype=np.uint8)
+            combo_feat_vec_np[:static_feat_np.shape[0]] = static_feat_np
+            combo_feat_vec_np[static_feat_np.shape[0] + 3:] = dynamic_feat_np
+            cv2.imwrite("/home/cmaxey/grid_imgs/_combo_feat_vecs.png",combo_feat_vec_np)
+            cv2.imwrite("/home/cmaxey/grid_imgs/_static_feat_vecs.png",static_feat_np)        
+            cv2.imwrite("/home/cmaxey/grid_imgs/_dynamic_feat_vecs.png",dynamic_feat_np)
+            '''
+            print('STATIC VECS\n')
+            for static_vec in static_feat_vecs:
+                print(static_vec.shape)
+                for idx in range(static_vec.shape[0]):
+                    static_vec[idx] = static_vec[idx] / np.linalg.norm(static_vec[idx])
+                sv_comp = np.matmul(static_vec,static_vec.transpose(1,0))
+                print(sv_comp > 1e-1)
+            print('\n\nDYNAMIC VECS\n\n')                
+            for dynamic_vec in dynamic_feat_vecs:
+                print(dynamic_vec.shape)
+                for idx in range(dynamic_vec.shape[0]):
+                    dynamic_vec[idx] = dynamic_vec[idx] / np.linalg.norm(dynamic_vec[idx])
+                dv_comp = np.matmul(dynamic_vec,dynamic_vec.transpose(1,0))
+                print(dv_comp > 1e-1)
+
+            print('\n\nSTATIC/DYNAMIC VECS\n\n')                                
+            for static_vec,dynamic_vec in zip(static_feat_vecs,dynamic_feat_vecs):
+                print(static_vec.shape,dynamic_vec.shape)
+                sv_comp = np.matmul(static_vec,dynamic_vec.transpose(1,0))
+                print(sv_comp > 1e-1)                    
+            '''        
+            exit(-1)
         
         self.img_save_counter = (self.img_save_counter + 1) % 50
         if self.img_save_counter == 0:
@@ -741,20 +839,31 @@ class KPlanesModel(Model):
             #grid_norm = 0.0
             local_vol_tvs = 0.0
             #outputs_lst = []
+            total_val = 0
+            local_vol_tvs_arr = []
+            val_mults = []
             for odx,_outputs in enumerate(outputs_lst):
                 #continue
+                val_mults.append(_outputs[0][0].shape[-1])
+                total_val += _outputs[0][0].shape[-1]
                 o0 = torch.nn.functional.normalize(_outputs[0][0],p=2,dim=1)
                 o1 = torch.nn.functional.normalize(_outputs[0][1],p=2,dim=1)
-                tmp0 = torch.abs(torch.matmul(o0,o0.permute(1,0)))
-                tmp1 = torch.abs(torch.matmul(o1,o1.permute(1,0)))
+                #tmp0 = torch.abs(torch.matmul(o0,o0.permute(1,0)))
+                #tmp1 = torch.abs(torch.matmul(o1,o1.permute(1,0)))
                 tmp2 = torch.abs(torch.matmul(o1,o0.permute(1,0)))                                
 
                 goal0 = torch.eye(o0.shape[0],device=o0.device)
                 goal1 = torch.eye(o1.shape[0],device=o1.device)                
-                l0 = (goal0 - tmp0)**2
-                l1 = (goal1 - tmp1)**2                
+                #l0 = (goal0 - tmp0)**2
+                #l1 = (goal1 - tmp1)**2                
                 l2 = tmp2**2
-                local_vol_tvs += (torch.sum(l0) + torch.sum(l1) + torch.sum(l2))
+                curr_local_tv = 0
+                #curr_local_tv += torch.sum(l0)
+                #curr_local_tv += torch.sum(l1)
+                curr_local_tv += torch.sum(l2)                
+                #local_vol_tvs_arr.append(torch.sum(l0) + torch.sum(l1) + torch.sum(l2))
+                local_vol_tvs_arr.append(curr_local_tv)
+                
                 '''
                 for sdx in range(9):
                     #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[0],_outputs[6])).mean()
@@ -766,6 +875,9 @@ class KPlanesModel(Model):
                     #local_vol_tvs += torch.abs(self.similarity_loss(_outputs[0][0],_outputs[0][1])).mean()
                     local_vol_tvs += torch.sum(tmp)
                 '''
+            for val_mult,curr_vol_tv in zip(val_mults,local_vol_tvs_arr):
+                local_vol_tvs += curr_vol_tv * val_mult / total_val
+            
             #for grid_idx,grids in enumerate(field_grids):
             #    continue
             #    grid_norm += torch.abs(1 - torch.norm(grids[0],2,0)).mean()
@@ -778,7 +890,7 @@ class KPlanesModel(Model):
             #loss_dict["camera_delts"] += (torch.abs(self.pos_diff[non_zero_idxs])*image_diff).mean()
             #loss_dict["camera_delts"] = (torch.abs(self.rot_angs*image_diff)).mean()
             #loss_dict["camera_delts"] += (torch.abs(self.pos_diff*image_diff)).mean()
-            loss_dict["local_vol_tvs"] = 0.01*local_vol_tvs / len(outputs_lst)
+            #loss_dict["local_vol_tvs"] = 0.1*local_vol_tvs / len(outputs_lst)
             #loss_dict["grid_norm"] = 0.01*grid_norm / (6*len(outputs_lst))
             
             #loss_dict["time_masks"] = time_mask_loss
@@ -894,7 +1006,11 @@ def l1_time_planes(multi_res_grids: List[torch.Tensor]) -> float:
         for grid_id in time_planes:
             #total += torch.abs(1 - grids[grid_id]).mean()
             #total += torch.abs(grids[grid_id][:num_comps]).mean()
-            total += grids[grid_id].mean() # drive it as low as possible to reduce selection of feature vectors
+            if grid_id in [2,4,5] and False:
+                total += torch.abs(grids[grid_id]).mean()
+            else:
+                total += grids[grid_id].mean() # drive it as low as possible to reduce selection of feature vectors
+            
             num_planes += 1
 
     return total / num_planes

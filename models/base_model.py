@@ -186,12 +186,12 @@ class Model(nn.Module):
         #dim_delts = [0,0,0,0]        
         #dwh_delts = [0,2,3,4]
         #dwh_delts = [0,0,0,0]
-        ogg_height_chunks = 144
+        ogg_height_chunks = 72
         height_chunks = ogg_height_chunks
         #height_chunks = 240        
         num_heights = actual_height // height_chunks
         #num_heights += (num_heights - 1)
-        ogg_width_chunks = 160
+        ogg_width_chunks = 64
         width_chunks = ogg_width_chunks
         #width_chunks = 320
         num_widths = actual_width // width_chunks

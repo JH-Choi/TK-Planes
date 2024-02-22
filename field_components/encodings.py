@@ -660,6 +660,10 @@ class KPlanesEncoding(Encoding):
         self.feature_coefs = nn.ParameterList(self.feature_coefs)
         nn.init.normal_(self.feature_coefs[0], 0, 0.5)
         nn.init.normal_(self.feature_coefs[1], 0, 0.5)
+        #self.og_static = self.feature_coefs[0].clone().detach()
+        #self.og_dynamic = self.feature_coefs[1].clone().detach()
+        #print(self.feature_coefs[0])
+        #exit(-1)
         self.feature_softmax_layer = nn.Softmax(dim=1)
         #self.feature_coefs = nn.ParameterList()        
         #self.coo_combs = [(0,1),(0,2),(1,2), (0,1),(0,3),(1,3), (0,2),(0,3),(2,3), (1,2),(1,3),(2,3)]
@@ -686,7 +690,8 @@ class KPlanesEncoding(Encoding):
                 #with torch.no_grad():
                 #    new_plane_coef = new_plane_coef*100
                 #nn.init.uniform_(new_plane_coef, a=init_a, b=init_b)
-                nn.init.uniform_(new_plane_coef, a=-0, b=1)    
+                #nn.init.uniform_(new_plane_coef, a=-5, b=5)
+                nn.init.normal_(new_plane_coef, 0, 0.5)
             #elif coo_idx > 5:
             #    nn.init.uniform_(new_plane_coef, a=-0.1, b=0.1)
             else:
@@ -836,26 +841,42 @@ class KPlanesEncoding(Encoding):
         #xyz_static = ((selection_func(outputs[0]).unsqueeze(-1) * (self.feature_coefs[0][0].unsqueeze(0))) *
         #              (selection_func(outputs[1]).unsqueeze(-1) * (self.feature_coefs[0][1].unsqueeze(0))) *
         #              (selection_func(outputs[3]).unsqueeze(-1) * (self.feature_coefs[0][3].unsqueeze(0))))
-        xyz_static = (selection_func(outputs[0],**select_kwargs).unsqueeze(-1) * 
-                      selection_func(outputs[1],**select_kwargs).unsqueeze(-1) * 
-                      selection_func(outputs[3],**select_kwargs).unsqueeze(-1)) * self.feature_coefs[0].unsqueeze(0)
-
+        xyz_static = ((selection_func(outputs[0],**select_kwargs) * 
+                       selection_func(outputs[1],**select_kwargs) * 
+                       selection_func(outputs[3],**select_kwargs)).unsqueeze(-1)) * self.feature_coefs[0].unsqueeze(0)
+        #xyz_static = (selection_func(outputs[0]*outputs[1]*outputs[3],**select_kwargs).unsqueeze(-1)) * (self.feature_coefs[0].unsqueeze(0))
         #xyz_static = xyz_static * test_vec.unsqueeze(0)
-        
+
+        '''
+        if self.feature_coefs[0].shape[-1] == 32:
+            feat_coef = self.feature_coefs[0].detach().cpu().numpy()
+            np.save("feat_coef.npy",feat_coef)
+            fmin = np.min(feat_coef)
+            fmax = np.max(feat_coef)
+            feat_coef = (feat_coef - fmin) / (fmax - fmin)
+            feat_coef = feat_coef * 255
+            feat_coef = feat_coef.astype(np.uint8)
+            cv2.imwrite("feat_coef_test.png",feat_coef)
+        '''
         #xyz_temporal = ((selection_func(outputs[2]).unsqueeze(-1) * (self.feature_coefs[1][2].unsqueeze(0))) *
         #                (selection_func(outputs[4]).unsqueeze(-1) * (self.feature_coefs[1][4].unsqueeze(0))) *
         #                (selection_func(outputs[5]).unsqueeze(-1) * (self.feature_coefs[1][5].unsqueeze(0))) *
         #                (selection_func(outputs[6]).unsqueeze(-1) * (self.feature_coefs[1][6].unsqueeze(0))) *
         #                (selection_func(outputs[7]).unsqueeze(-1) * (self.feature_coefs[1][7].unsqueeze(0))) *                      
         #                (selection_func(outputs[8]).unsqueeze(-1) * (self.feature_coefs[1][8].unsqueeze(0))))
-        #xyz_temporal_time = (selection_func(outputs[2],**select_kwargs).unsqueeze(-1) * 
-        #                     selection_func(outputs[4],**select_kwargs).unsqueeze(-1) * 
-        #                     selection_func(outputs[5],**select_kwargs).unsqueeze(-1))
+        #xyz_temporal_time = (selection_func(outputs[2],**select_kwargs) * 
+        #                     selection_func(outputs[4],**select_kwargs) *
+        #                     selection_func(outputs[5],**select_kwargs))
         xyz_temporal_time = (outputs[2]*outputs[4]*outputs[5])        
-        xyz_temporal_space = ((selection_func(outputs[6],**select_kwargs) * 
-                               selection_func(outputs[7],**select_kwargs) * 
-                               selection_func(outputs[8],**select_kwargs)).unsqueeze(-1)) * self.feature_coefs[1].unsqueeze(0)
+        xyz_temporal_space = (selection_func(outputs[6],**select_kwargs) * 
+                              selection_func(outputs[7],**select_kwargs) * 
+                              selection_func(outputs[8],**select_kwargs))
+        xyz_temporal_space = (xyz_temporal_space.unsqueeze(-1)) * self.feature_coefs[1].unsqueeze(0)                
+        #xyz_temporal_space = (outputs[6]*outputs[7]*outputs[8])
+        #xyz_temporal_space = (selection_func(xyz_temporal_space,**select_kwargs).unsqueeze(-1)) * self.feature_coefs[1].unsqueeze(0)
 
+        #xyz_temporal = ((xyz_temporal_space * xyz_temporal_time).unsqueeze(-1)) * self.feature_coefs[1].unsqueeze(0)
+        
         #xyz_static = torch.sigmoid(xyz_static)
         #xyz_temporal = torch.sigmoid(xyz_temporal)
         #xyz_static = torch.tanh(xyz_static)
@@ -863,6 +884,7 @@ class KPlanesEncoding(Encoding):
         #xyz_static = (xyz_static.unsqueeze(-1)) * (self.feature_coefs[0].unsqueeze(0))
         #xyz_temporal = (xyz_temporal.unsqueeze(-1)) * (self.feature_coefs[1].unsqueeze(0))        
         xyz_static = xyz_static.reshape(xyz_static.shape[0],-1)
+        #xyz_temporal = xyz_temporal.reshape(xyz_temporal.shape[0],-1)
         xyz_temporal = (xyz_temporal_space.reshape(xyz_temporal_space.shape[0],-1)) * xyz_temporal_time
 
         #output = self.proc_func(self.output_head(torch.cat([static_mask*F.normalize(xyz_static),dynamic_mask*F.normalize(xyz_temporal),
@@ -871,6 +893,10 @@ class KPlanesEncoding(Encoding):
         output = self.proc_func(self.output_head(torch.cat([xyz_static,xyz_temporal],dim=-1)))
 
         vol_tv = self.feature_coefs
+
+        #print("STATIC DIFF: {}".format(torch.sum(torch.abs(self.feature_coefs[0].cpu() - self.og_static))))
+        #print("DYNAMIC DIFF: {}".format(torch.sum(torch.abs(self.feature_coefs[1].cpu() - self.og_dynamic))))        
+        
         # Typing: output gets converted to a tensor after the first iteration of the loop
         assert isinstance(output, Tensor)
 

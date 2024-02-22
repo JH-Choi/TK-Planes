@@ -198,9 +198,11 @@ class KPlanesField(Field):
                 },
             )
             in_dim_color = (
-                self.direction_encoding.n_output_dims + self.geo_feat_dim + self.appearance_embedding_dim
+                #self.direction_encoding.n_output_dims + self.geo_feat_dim + self.appearance_embedding_dim
+                self.geo_feat_dim + self.appearance_embedding_dim                
             )
             #print('COLOR: {}, {}, {}'.format(self.direction_encoding.n_output_dims,in_dim_color, self.geo_feat_dim))
+            '''
             self.color_net = tcnn.Network(
                 n_input_dims=in_dim_color,
                 n_output_dims=self.geo_feat_dim, #3,
@@ -215,6 +217,8 @@ class KPlanesField(Field):
                     "n_hidden_layers": 2,
                 },
             )
+            '''
+            self.color_net = torch.nn.Identity()
 
     def get_density(self, ray_samples: RaySamples) -> Tuple[TensorType, TensorType]:
         """Computes and returns the densities."""
@@ -274,6 +278,14 @@ class KPlanesField(Field):
         density = trunc_exp(density_before_activation.to(positions) - 1)
         return density, features
 
+    def get_dir_encodings(self,ray_samples):
+        output_shape = ray_samples.frustums.shape
+        directions = ray_samples.frustums.directions.reshape(-1, 3)
+        directions = shift_directions_for_tcnn(directions)
+        d = self.direction_encoding(directions)
+
+        return d
+    
     def get_outputs(
         self, ray_samples: RaySamples, density_embedding: Optional[TensorType] = None
     ) -> Dict[FieldHeadNames, TensorType]:
@@ -285,8 +297,8 @@ class KPlanesField(Field):
         if self.linear_decoder:
             color_features = [density_embedding]
         else:
-            directions = shift_directions_for_tcnn(directions)
-            d = self.direction_encoding(directions)
+            #directions = shift_directions_for_tcnn(directions)
+            #d = self.direction_encoding(directions)
             #test_d = torch.randn((1,3))
             #test_d = self.direction_encoding(test_d)
             #print(test_d.shape)
@@ -299,7 +311,9 @@ class KPlanesField(Field):
             #sq_size = np.sqrt(size)
             #print(size,sq_size)
 
-            color_features = [d, density_embedding.view(-1, self.geo_feat_dim)]
+            #color_features = [d, density_embedding.view(-1, self.geo_feat_dim)]
+            #color_features = [density_embedding.view(-1, self.geo_feat_dim)]
+            color_features = density_embedding.view(-1, self.geo_feat_dim)            
             
         if self.appearance_embedding_dim > 0:
             if self.training:
@@ -320,7 +334,7 @@ class KPlanesField(Field):
             if not self.linear_decoder:
                 color_features.append(embedded_appearance)
 
-        color_features = torch.cat(color_features, dim=-1)
+        #color_features = torch.cat(color_features, dim=-1)
         if self.linear_decoder:
             basis_input = directions
             if self.appearance_ambedding_dim > 0:
@@ -333,7 +347,7 @@ class KPlanesField(Field):
             rgb = self.color_net(color_features).view(*output_shape, -1)
 
 
-        return {FieldHeadNames.RGB: rgb, "vol_tvs": self.vol_tvs}
+        return {FieldHeadNames.RGB: rgb, "vol_tvs": self.vol_tvs} #, "dir_encoding": d}
 
 
 class KPlanesDensityField(Field):
