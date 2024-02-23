@@ -102,7 +102,7 @@ class Okutama(DataParser):
         # in x,y,z order
         camera_to_world[..., 3] *= self.scale_factor
         #scene_box = SceneBox(aabb=torch.tensor([[-4, -4, -3.75], [4, 4, 0.25]], dtype=torch.float32))
-        scene_box = SceneBox(aabb=torch.tensor([[-12, -12, -21], [12, 12, 3]], dtype=torch.float32))        
+        scene_box = SceneBox(aabb=torch.tensor([[-20, -20, -35], [20, 20, 5]], dtype=torch.float32))        
 
         cameras = Cameras(
             camera_to_worlds=camera_to_world,

@@ -639,6 +639,7 @@ class KPlanesEncoding(Encoding):
             )
         has_time_planes = self.in_dim == 4
 
+        self.dynamo = False
         self.proc_func = torch.nn.Identity()
         #self.proc_func = torch.nn.Tanh()
         #self.proc_func = F.normalize        
@@ -658,7 +659,7 @@ class KPlanesEncoding(Encoding):
         self.feature_coefs.append(nn.Parameter(torch.empty([self.select_dim, self.num_components])))
 
         self.feature_coefs = nn.ParameterList(self.feature_coefs)
-        nn.init.normal_(self.feature_coefs[0], 0, 0.5)
+        nn.init.normal_(self.feature_coefs[0], 0, 1)
 
         #self.og_static = self.feature_coefs[0].clone().detach()
         #self.og_dynamic = self.feature_coefs[1].clone().detach()
@@ -688,8 +689,8 @@ class KPlanesEncoding(Encoding):
                 #with torch.no_grad():
                 #    new_plane_coef = new_plane_coef*100
                 #nn.init.uniform_(new_plane_coef, a=init_a, b=init_b)
-                #nn.init.uniform_(new_plane_coef, a=-5, b=5)
-                nn.init.normal_(new_plane_coef, 0, 0.5)
+                nn.init.uniform_(new_plane_coef, a=-5, b=5)
+                #nn.init.normal_(new_plane_coef, 0, 0.5)
             #elif coo_idx > 5:
             #    nn.init.uniform_(new_plane_coef, a=-0.1, b=0.1)
             else:
@@ -741,11 +742,9 @@ class KPlanesEncoding(Encoding):
             #    grid = self.time_freq_conv[0](grid) + grid
             #    grid = torch.fft.ifft2(grid).type(grid_type)
             coords = in_tensor[..., coo_comb].view(1, 1, -1, 2)  # [1, 1, flattened_bs, 2]
-            #if 3 in coo_comb:
-            #    print(coords.shape)
-            #    print(in_tensor.shape)
-            #    print(self.coo_combs)
-            #    print(coo_comb)
+            if 3 in coo_comb and not self.dynamo:
+                new_time = (torch.rand(1) - 0.5) * 2
+                coords[:,:,:,1] = new_time
 
             interp = F.grid_sample(
                grid, coords, align_corners=True, padding_mode="border"
@@ -797,6 +796,7 @@ class KPlanesEncoding(Encoding):
         #                outputs[6]*outputs[7]*outputs[8])
 
         selection_func = torch.sigmoid
+        time_selection_func = torch.tanh
         select_kwargs = {}        
         #selection_func = torch.softmax
         #select_kwargs = {"dim":1}        
@@ -819,9 +819,13 @@ class KPlanesEncoding(Encoding):
             feat_coef = feat_coef.astype(np.uint8)
             cv2.imwrite("feat_coef_test.png",feat_coef)
         '''
-        xyz_temporal = (outputs[2]*outputs[4]*outputs[5])
+        xyz_temporal = outputs[2]*outputs[4]*outputs[5]
+        #xyz_temporal = time_selection_func(xyz_temporal)
 
-        xyz = (selection_func(xyz_static * xyz_temporal,**select_kwargs).unsqueeze(-1)) * (self.feature_coefs[0].unsqueeze(0))
+        #curr_coeffy = torch.nn.functional.normalize(self.feature_coefs[0],p=2,dim=1)
+        curr_coeffy = self.feature_coefs[0]        
+        xyz = (selection_func(xyz_static * xyz_temporal,**select_kwargs).unsqueeze(-1)) * (curr_coeffy.unsqueeze(0))
+        #xyz = (selection_func(xyz_static,**select_kwargs).unsqueeze(-1)) * (self.feature_coefs[0].unsqueeze(0))        
         xyz = xyz.reshape(xyz.shape[0],-1)
 
         output = xyz

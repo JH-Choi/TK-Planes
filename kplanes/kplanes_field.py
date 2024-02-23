@@ -125,7 +125,7 @@ class KPlanesField(Field):
         self.has_time_planes = len(grid_base_resolution) > 3
 
         self.vol_tvs = None
-
+        self.dynamo = False
         # Init planes
         self.grids = nn.ModuleList()
         for res in multiscale_res:
@@ -221,6 +221,8 @@ class KPlanesField(Field):
 
     def get_density(self, ray_samples: RaySamples) -> Tuple[TensorType, TensorType]:
         """Computes and returns the densities."""
+        for grid in self.grids:
+            grid.dynamo = self.dynamo
         positions = ray_samples.frustums.get_positions()
         if self.spatial_distortion is not None:
             positions = self.spatial_distortion(positions)
@@ -286,7 +288,7 @@ class KPlanesField(Field):
         return d
     
     def get_outputs(
-        self, ray_samples: RaySamples, density_embedding: Optional[TensorType] = None
+            self, ray_samples: RaySamples, density_embedding: Optional[TensorType] = None,
     ) -> Dict[FieldHeadNames, TensorType]:
         assert density_embedding is not None
 

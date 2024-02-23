@@ -142,17 +142,17 @@ kplanes_dynamic_method = MethodSpecification(
             model=KPlanesModelConfig(
                 eval_num_rays_per_chunk=1 << 2,
                 #grid_base_resolution=[32, 32, 16, 77],  # time-resolution should be half the time-steps
-                grid_base_resolution=[16, 16, 16, 77],  # time-resolution should be half the time-steps                
-                grid_feature_dim=32,
-                grid_select_dim=20,
+                grid_base_resolution=[32, 32, 32, 77],  # time-resolution should be half the time-steps                
+                grid_feature_dim=16,
+                grid_select_dim=48,
                 patch_size=[72,64],
                 #patch_size=[144,160],                
                 #patch_size=[240,256],                
                 #patch_size=[240,320], 
                 near_plane=0,
-                far_plane=35,
+                far_plane=45,
                 num_samples=6,
-                collider_params= {'far_plane': 35.0, 'near_plane': 0.0},
+                collider_params= {'far_plane': 45.0, 'near_plane': 0.0},
                 concat_features_across_scales=False,
                 multiscale_res=[1,2,4],
                 is_contracted=False,
@@ -166,11 +166,11 @@ kplanes_dynamic_method = MethodSpecification(
                 loss_coefficients={
                     "interlevel": 1.0,
                     "distortion": 0.01,
-                    "plane_tv": 0.1,
+                    "plane_tv": 1,
                     "plane_tv_proposal_net": 0.0001,
                     "l1_time_planes": 0.001,
                     "l1_time_planes_proposal_net": 0.001,
-                    "time_smoothness": 0.1,
+                    "time_smoothness": 1,
                     "time_smoothness_proposal_net": 0.0001,
                 },
             ),
