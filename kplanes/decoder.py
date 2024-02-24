@@ -123,7 +123,7 @@ class UpConv(nn.Module):
                                             #nn.InstanceNorm2d(self.out_channels // 8),                                            
                                             conv3x3(curr_out_channels * 4, curr_out_channels * 2),
                                             nn.LeakyReLU(0.02))
-            dir_encoding_dims = 16
+            dir_encoding_dims = 0
             self.dir_render = nn.Sequential(
                                             conv1x1((curr_out_channels * 2) + dir_encoding_dims, curr_out_channels * 4),
                                             nn.LeakyReLU(0.02),                                
@@ -148,7 +148,7 @@ class UpConv(nn.Module):
         
         if self.final_layer:
             x = self.conv_final(x)
-            x = torch.concat([x,dir_encoding],dim=1)
+            #x = torch.concat([x,dir_encoding],dim=1)
             x = self.dir_render(x)
 
         return x

@@ -118,7 +118,8 @@ class KPlanesField(Field):
         self.num_images = num_images
         self.grid_select_dim = grid_select_dim
         #self.geo_feat_dim = (grid_feature_dim * (self.grid_select_dim) // 2) #- 1 #geo_feat_dim
-        self.geo_feat_dim = (grid_feature_dim // 2) #- 1 #geo_feat_dim        
+        #self.geo_feat_dim = (grid_feature_dim // 2) #- 1 #geo_feat_dim
+        self.geo_feat_dim = grid_feature_dim
         self.grid_base_resolution = list(grid_base_resolution)
         self.concat_across_scales = concat_across_scales
         self.spatial_distortion = spatial_distortion
@@ -183,14 +184,15 @@ class KPlanesField(Field):
             #print('SIGMA: {}, {}'.format(self.feature_dim, self.geo_feat_dim * 2))
             self.sigma_net = tcnn.Network(
                 n_input_dims=self.feature_dim,
-                n_output_dims=self.geo_feat_dim * 2, #+ 1,
+                n_output_dims=self.geo_feat_dim + 1,
+                #n_output_dims=self.geo_feat_dim * 2, #+ 1,                
                 network_config={
                     "otype": "CutlassMLP",
                     #"otype": "FullyFusedMLP",                    
                     "activation": "ReLU",
                     #"activation": "LeakyReLU",                    
                     "output_activation": "None",
-                    "n_neurons": self.geo_feat_dim * 2 * 2, #64
+                    "n_neurons": (self.geo_feat_dim + 1) * 2, #64
                     "n_hidden_layers": 1
                 },
             )
@@ -202,11 +204,10 @@ class KPlanesField(Field):
                 },
             )
             in_dim_color = (
-                #self.direction_encoding.n_output_dims + self.geo_feat_dim + self.appearance_embedding_dim
-                self.geo_feat_dim + self.appearance_embedding_dim                
+                self.direction_encoding.n_output_dims + self.geo_feat_dim + self.appearance_embedding_dim
+                #self.geo_feat_dim - 1 + self.appearance_embedding_dim                
             )
             #print('COLOR: {}, {}, {}'.format(self.direction_encoding.n_output_dims,in_dim_color, self.geo_feat_dim))
-            '''
             self.color_net = tcnn.Network(
                 n_input_dims=in_dim_color,
                 n_output_dims=self.geo_feat_dim, #3,
@@ -217,12 +218,12 @@ class KPlanesField(Field):
                     #"activation": "LeakyReLU",                                        
                     #"output_activation": "ReLU", #"None", #"Sigmoid",
                     "output_activation": "None", #"Sigmoid",                    
-                    "n_neurons": in_dim_color * 2, #64
+                    #"n_neurons": in_dim_color * 2, #64
+                    "n_neurons": self.geo_feat_dim * 2, #64                    
                     "n_hidden_layers": 2,
                 },
             )
-            '''
-            self.color_net = torch.nn.Identity()
+            #self.color_net = torch.nn.Identity()
 
     def get_density(self, ray_samples: RaySamples) -> Tuple[TensorType, TensorType]:
         """Computes and returns the densities."""
@@ -276,12 +277,13 @@ class KPlanesField(Field):
             density_before_activation = self.sigma_net(features).view(*ray_samples.frustums.shape, -1)
         else:
             features = self.sigma_net(features).view(*ray_samples.frustums.shape, -1)
-            features, density_before_activation = torch.split(features, [self.geo_feat_dim, self.geo_feat_dim], dim=-1) #1], dim=-1)
+            features, density_before_activation = torch.split(features, [self.geo_feat_dim, 1], dim=-1) #1], dim=-1)
 
         # Rectifying the density with an exponential is much more stable than a ReLU or
         # softplus, because it enables high post-activation (float32) density outputs
         # from smaller internal (float16) parameters.
         density = trunc_exp(density_before_activation.to(positions) - 1)
+
         return density, features
 
     def get_dir_encodings(self,ray_samples):
@@ -303,8 +305,8 @@ class KPlanesField(Field):
         if self.linear_decoder:
             color_features = [density_embedding]
         else:
-            #directions = shift_directions_for_tcnn(directions)
-            #d = self.direction_encoding(directions)
+            directions = shift_directions_for_tcnn(directions)
+            d = self.direction_encoding(directions)
             #test_d = torch.randn((1,3))
             #test_d = self.direction_encoding(test_d)
             #print(test_d.shape)
@@ -317,9 +319,9 @@ class KPlanesField(Field):
             #sq_size = np.sqrt(size)
             #print(size,sq_size)
 
-            #color_features = [d, density_embedding.view(-1, self.geo_feat_dim)]
+            color_features = [d, density_embedding.reshape(-1, self.geo_feat_dim)]
             #color_features = [density_embedding.view(-1, self.geo_feat_dim)]
-            color_features = density_embedding.view(-1, self.geo_feat_dim)            
+            #color_features = density_embedding.view(-1, self.geo_feat_dim)            
             
         if self.appearance_embedding_dim > 0:
             if self.training:
@@ -340,7 +342,8 @@ class KPlanesField(Field):
             if not self.linear_decoder:
                 color_features.append(embedded_appearance)
 
-        #color_features = torch.cat(color_features, dim=-1)
+        color_features = torch.cat(color_features, dim=-1)
+
         if self.linear_decoder:
             basis_input = directions
             if self.appearance_ambedding_dim > 0:
@@ -350,9 +353,10 @@ class KPlanesField(Field):
             rgb = torch.sum(color_features[:, None, :] * basis_values, dim=-1)  # [batch, 3]
             rgb = torch.sigmoid(rgb).view(*output_shape, -1).to(directions)
         else:
-            rgb = self.color_net(color_features).view(*output_shape, -1)
+            rgb = self.color_net(color_features)#.view(*output_shape, -1)
 
-
+        print(rgb.shape)
+        exit(-1)
         return {FieldHeadNames.RGB: rgb, "vol_tvs": self.vol_tvs} #, "dir_encoding": d}
 
 
