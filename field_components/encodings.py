@@ -656,25 +656,25 @@ class KPlanesEncoding(Encoding):
         self.feature_coefs = []
         #self.feature_coefs.append(nn.Parameter(torch.empty([len(self.coo_combs),self.select_dim[0], self.num_components])))
         #self.feature_coefs.append(nn.Parameter(torch.empty([len(self.coo_combs),self.select_dim[1], self.num_components])))
-        self.feature_coefs.append(nn.Parameter(torch.empty([self.select_dim, self.num_components])))
+        #self.feature_coefs.append(nn.Parameter(torch.empty([self.select_dim, self.num_components])))
 
-        self.feature_coefs = nn.ParameterList(self.feature_coefs)
-        nn.init.normal_(self.feature_coefs[0], 0, 1)
+        #self.feature_coefs = nn.ParameterList(self.feature_coefs)
+        #nn.init.normal_(self.feature_coefs[0], 0, 1)
 
         #self.og_static = self.feature_coefs[0].clone().detach()
         #self.og_dynamic = self.feature_coefs[1].clone().detach()
         #print(self.feature_coefs[0])
         #exit(-1)
-        self.feature_softmax_layer = nn.Softmax(dim=1)
+        #self.feature_softmax_layer = nn.Softmax(dim=1)
         #self.feature_coefs = nn.ParameterList()        
         #self.coo_combs = [(0,1),(0,2),(1,2), (0,1),(0,3),(1,3), (0,2),(0,3),(2,3), (1,2),(1,3),(2,3)]
 
         for coo_idx,coo_comb in enumerate(self.coo_combs):
 
             if 3 in coo_comb:
-                num_comps = self.select_dim#*self.num_components
+                num_comps = 2*self.select_dim#*self.num_components
             else:
-                num_comps = self.select_dim
+                num_comps = 2*self.select_dim
                 
             new_plane_coef = nn.Parameter(
                 torch.empty([num_comps] + [self.resolution[cc] for cc in coo_comb[::-1]])
@@ -689,19 +689,19 @@ class KPlanesEncoding(Encoding):
                 #with torch.no_grad():
                 #    new_plane_coef = new_plane_coef*100
                 #nn.init.uniform_(new_plane_coef, a=init_a, b=init_b)
-                nn.init.uniform_(new_plane_coef, a=-5, b=5)
+                nn.init.uniform_(new_plane_coef, a=-1, b=1)
                 #nn.init.normal_(new_plane_coef, 0, 0.5)
             #elif coo_idx > 5:
             #    nn.init.uniform_(new_plane_coef, a=-0.1, b=0.1)
             else:
-                nn.init.uniform_(new_plane_coef, a=-5, b=5) #init_a, b=init_b)
+                nn.init.uniform_(new_plane_coef, a=-1, b=1) #init_a, b=init_b)
             #nn.init.uniform_(new_feature_coef, a=-0.1, b=0.1)
             self.plane_coefs.append(new_plane_coef)
             #self.feature_coefs.append(new_feature_coef)
 
         bias_bool = False
 
-        total_comps = (self.select_dim)* self.num_components
+        total_comps = (2*self.select_dim)#* self.num_components
         out_comps = total_comps
 
         self.output_head = nn.Identity()
@@ -753,9 +753,9 @@ class KPlanesEncoding(Encoding):
             #    print(interp.shape)
 
             if 3 in coo_comb:
-                num_comps = self.select_dim#*self.num_components
+                num_comps = 2*self.select_dim#*self.num_components
             else:
-                num_comps = self.select_dim
+                num_comps = 2*self.select_dim
                 
             interp = interp.view(num_comps, -1).T  # [flattened_bs, output_dim]
 
@@ -797,9 +797,10 @@ class KPlanesEncoding(Encoding):
 
         #selection_func = torch.sigmoid
         #time_selection_func = torch.tanh
-        #select_kwargs = {}        
-        selection_func = torch.softmax
-        select_kwargs = {"dim":1}        
+        selection_func = torch.nn.Identity()
+        select_kwargs = {}        
+        #selection_func = torch.softmax
+        #select_kwargs = {"dim":1}        
         #test_vec = torch.ones_like(self.feature_coefs[0][0])
         #test_vec[-5] = 0
 
@@ -823,19 +824,19 @@ class KPlanesEncoding(Encoding):
         #xyz_temporal = time_selection_func(xyz_temporal)
 
         #curr_coeffy = torch.nn.functional.normalize(self.feature_coefs[0],p=2,dim=1)
-        curr_coeffy = self.feature_coefs[0]
+        #curr_coeffy = self.feature_coefs[0]
         #print(torch.max(selection_func(xyz_static * xyz_temporal, **select_kwargs)))
         #exit(-1)
         xyz_select = selection_func(xyz_static * xyz_temporal,**select_kwargs)
-        xyz = (xyz_select.unsqueeze(-1)) * (curr_coeffy.unsqueeze(0))
-        xyz = torch.sum(xyz,dim=1)
+        #xyz = (xyz_select.unsqueeze(-1)) * (curr_coeffy.unsqueeze(0))
+        #xyz = torch.sum(xyz,dim=1)
         #xyz = (selection_func(xyz_static,**select_kwargs).unsqueeze(-1)) * (self.feature_coefs[0].unsqueeze(0))        
         #xyz = xyz.reshape(xyz.shape[0],-1)
-
-        output = xyz
+        
+        output = xyz_select
         vol_tv = None
-        if xyz.requires_grad:
-            vol_tv = (self.feature_coefs,xyz_select)
+        #if xyz.requires_grad:
+        #    vol_tv = (self.feature_coefs,xyz_select)
 
         #print("STATIC DIFF: {}".format(torch.sum(torch.abs(self.feature_coefs[0].cpu() - self.og_static))))
         #print("DYNAMIC DIFF: {}".format(torch.sum(torch.abs(self.feature_coefs[1].cpu() - self.og_dynamic))))        
