@@ -795,11 +795,11 @@ class KPlanesEncoding(Encoding):
         #xyz_temporal = (outputs[2]*outputs[4]*outputs[5]*
         #                outputs[6]*outputs[7]*outputs[8])
 
-        selection_func = torch.sigmoid
-        time_selection_func = torch.tanh
-        select_kwargs = {}        
-        #selection_func = torch.softmax
-        #select_kwargs = {"dim":1}        
+        #selection_func = torch.sigmoid
+        #time_selection_func = torch.tanh
+        #select_kwargs = {}        
+        selection_func = torch.softmax
+        select_kwargs = {"dim":1}        
         #test_vec = torch.ones_like(self.feature_coefs[0][0])
         #test_vec[-5] = 0
 
@@ -823,14 +823,19 @@ class KPlanesEncoding(Encoding):
         #xyz_temporal = time_selection_func(xyz_temporal)
 
         #curr_coeffy = torch.nn.functional.normalize(self.feature_coefs[0],p=2,dim=1)
-        curr_coeffy = self.feature_coefs[0]        
-        xyz = (selection_func(xyz_static * xyz_temporal,**select_kwargs).unsqueeze(-1)) * (curr_coeffy.unsqueeze(0))
+        curr_coeffy = self.feature_coefs[0]
+        #print(torch.max(selection_func(xyz_static * xyz_temporal, **select_kwargs)))
+        #exit(-1)
+        xyz_select = selection_func(xyz_static * xyz_temporal,**select_kwargs)
+        xyz = (xyz_select.unsqueeze(-1)) * (curr_coeffy.unsqueeze(0))
+        xyz = torch.sum(xyz,dim=1)
         #xyz = (selection_func(xyz_static,**select_kwargs).unsqueeze(-1)) * (self.feature_coefs[0].unsqueeze(0))        
-        xyz = xyz.reshape(xyz.shape[0],-1)
+        #xyz = xyz.reshape(xyz.shape[0],-1)
 
         output = xyz
-
-        vol_tv = self.feature_coefs
+        vol_tv = None
+        if xyz.requires_grad:
+            vol_tv = (self.feature_coefs,xyz_select)
 
         #print("STATIC DIFF: {}".format(torch.sum(torch.abs(self.feature_coefs[0].cpu() - self.og_static))))
         #print("DYNAMIC DIFF: {}".format(torch.sum(torch.abs(self.feature_coefs[1].cpu() - self.og_dynamic))))        

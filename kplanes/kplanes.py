@@ -188,7 +188,7 @@ class KPlanesModel(Model):
         # Fields
         scale = 4
         feat_dim = self.config.grid_feature_dim // 4
-        self.start_feat_dim = feat_dim * (self.config.grid_select_dim)
+        self.start_feat_dim = feat_dim #* (self.config.grid_select_dim)
         
         curr_res = [res * 4 if idx < 3 else res for idx,res in enumerate(self.config.grid_base_resolution)]
         self.patch_size = self.config.patch_size
@@ -272,7 +272,7 @@ class KPlanesModel(Model):
         
         #self.ray_bundle_encoder = torch.nn.ModuleList(self.ray_bundle_encoder)
         self.final_dim = self.config.patch_size
-        decoder_feat_dim_start = (self.config.grid_feature_dim // 2) * self.config.grid_select_dim
+        decoder_feat_dim_start = (self.config.grid_feature_dim // 2)# * self.config.grid_select_dim
 
         self.decoder = ImageDecoder(input_dim=self.final_dim[0] // 8,
                                     final_dim=self.final_dim[0],
@@ -586,12 +586,11 @@ class KPlanesModel(Model):
             num_samps = num_samps // 2
 
         reconst_image = self.decoder(rgb_images,dynamo,dir_encoding).permute(0,2,3,1) #.unsqueeze(0)).permute(0,2,3,1)
-
         #if dim_adder > 0:
         #    reconst_image = reconst_image[:,dim_adder // 2:-(dim_adder // 2),dim_adder // 2:-(dim_adder // 2)]
 
         save_grids = True
-        #save_grids = False
+        save_grids = False
         if save_grids:
             field_grids = []
             feat_coeffs = []
@@ -604,11 +603,15 @@ class KPlanesModel(Model):
                 curr_grids = []
                 for grid_num in grid_nums:
                     curr_coef_grid = coef_grid[grid_num].detach().cpu()
-                    if grid_num in [2,4,5]:
-                        curr_coef_grid = torch.tanh(curr_coef_grid)
-                    else:
-                        curr_coef_grid = torch.sigmoid(curr_coef_grid)
+                    #if grid_num in [2,4,5]:
+                    #    curr_coef_grid = torch.tanh(curr_coef_grid)
+                    #else:
+                    #    curr_coef_grid = torch.sigmoid(curr_coef_grid)
                     curr_coef_grid = curr_coef_grid.numpy()
+                    if coef_idx == 0 and grid_num == 0 and False:
+                        small_grid = curr_coef_grid[:,62:66,62:66]
+                        small_grid = small_grid.reshape(small_grid.shape[0],-1).transpose(1,0)
+                        print(small_grid)
                     curr_grids.append(curr_coef_grid)
                 #print(curr_grids[0].shape)
                 for gidx, curr_grid in enumerate(curr_grids):
@@ -617,11 +620,11 @@ class KPlanesModel(Model):
                     #    print(curr_grid)
                     print("{}: {}/{}".format(gidx,np.min(curr_grid),np.max(curr_grid)))
                     if gidx in [2,4,5]:
-                        grid_min = -1 #np.min(curr_grid)
-                        grid_max = 1 #np.max(curr_grid)
+                        grid_min = -10 #np.min(curr_grid)
+                        grid_max = 10 #np.max(curr_grid)
                     else:
-                        grid_min = 0
-                        grid_max = 1
+                        grid_min = -10
+                        grid_max = 10
                     #curr_grid = np.clip(curr_grid,grid_min,grid_max)
                     curr_grid = ((curr_grid - grid_min) / (grid_max - grid_min))
                     #curr_grid = curr_grid.astype(np.uint8)
@@ -806,7 +809,8 @@ class KPlanesModel(Model):
 
             loss_dict = misc.scale_dict(loss_dict, self.config.loss_coefficients)
 
-            outputs_lst = self.vol_tvs
+            outputs_lst = [volly[0][0] for volly in self.vol_tvs]
+            select_vecs = [volly[0][1] for volly in self.vol_tvs]
             self.vol_tvs = []
             vol_tvs = 0.0
             time_mask_loss = 0.0
@@ -829,9 +833,9 @@ class KPlanesModel(Model):
             val_mults = []
             for odx,_outputs in enumerate(outputs_lst):
                 #continue
-                val_mults.append(_outputs[0][0].shape[-1])
-                total_val += _outputs[0][0].shape[-1]
-                o0 = torch.nn.functional.normalize(_outputs[0][0],p=2,dim=1)
+                val_mults.append(_outputs[0].shape[-1])
+                total_val += _outputs[0].shape[-1]
+                o0 = torch.nn.functional.normalize(_outputs[0],p=2,dim=1)
                 #o1 = torch.nn.functional.normalize(_outputs[0][1],p=2,dim=1)
                 tmp0 = torch.abs(torch.matmul(o0,o0.permute(1,0)))
                 #tmp1 = torch.abs(torch.matmul(o1,o1.permute(1,0)))
@@ -862,7 +866,11 @@ class KPlanesModel(Model):
                 '''
             for val_mult,curr_vol_tv in zip(val_mults,local_vol_tvs_arr):
                 local_vol_tvs += curr_vol_tv * val_mult / total_val
-            
+
+            select_loss = 0
+            for select_vec in select_vecs:
+                select_loss += (1 - torch.amax(select_vec,dim=1)).mean()
+
             #for grid_idx,grids in enumerate(field_grids):
             #    continue
             #    grid_norm += torch.abs(1 - torch.norm(grids[0],2,0)).mean()
@@ -875,7 +883,8 @@ class KPlanesModel(Model):
             #loss_dict["camera_delts"] += (torch.abs(self.pos_diff[non_zero_idxs])*image_diff).mean()
             #loss_dict["camera_delts"] = (torch.abs(self.rot_angs*image_diff)).mean()
             #loss_dict["camera_delts"] += (torch.abs(self.pos_diff*image_diff)).mean()
-            loss_dict["local_vol_tvs"] = 1*local_vol_tvs / len(outputs_lst)
+            loss_dict["local_vol_tvs"] = 1*local_vol_tvs / 3
+            loss_dict["select_loss"] = 1*select_loss / 3
             #loss_dict["grid_norm"] = 0.01*grid_norm / (6*len(outputs_lst))
             
             #loss_dict["time_masks"] = time_mask_loss

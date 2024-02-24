@@ -117,7 +117,8 @@ class KPlanesField(Field):
         self.register_buffer("aabb", aabb)
         self.num_images = num_images
         self.grid_select_dim = grid_select_dim
-        self.geo_feat_dim = (grid_feature_dim * (self.grid_select_dim) // 2) #- 1 #geo_feat_dim
+        #self.geo_feat_dim = (grid_feature_dim * (self.grid_select_dim) // 2) #- 1 #geo_feat_dim
+        self.geo_feat_dim = (grid_feature_dim // 2) #- 1 #geo_feat_dim        
         self.grid_base_resolution = list(grid_base_resolution)
         self.concat_across_scales = concat_across_scales
         self.spatial_distortion = spatial_distortion
@@ -132,10 +133,14 @@ class KPlanesField(Field):
             # Resolution fix: multi-res only on spatial planes
             resolution = [r * res for r in self.grid_base_resolution[:3]] + self.grid_base_resolution[3:]
             self.grids.append(KPlanesEncoding(resolution, grid_feature_dim, grid_select_dim))
+        #self.feature_dim = (
+        #    grid_feature_dim * (self.grid_select_dim) * len(multiscale_res) if self.concat_across_scales
+        #    else grid_feature_dim * (self.grid_select_dim)
+        #)
         self.feature_dim = (
-            grid_feature_dim * (self.grid_select_dim) * len(multiscale_res) if self.concat_across_scales
-            else grid_feature_dim * (self.grid_select_dim)
-        )
+            grid_feature_dim  * len(multiscale_res) if self.concat_across_scales
+            else grid_feature_dim
+        )        
 
         # Init appearance code-related parameters
         self.appearance_embedding_dim = appearance_embedding_dim
