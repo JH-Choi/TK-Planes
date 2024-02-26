@@ -272,8 +272,8 @@ class KPlanesModel(Model):
         
         #self.ray_bundle_encoder = torch.nn.ModuleList(self.ray_bundle_encoder)
         self.final_dim = self.config.patch_size
-        decoder_feat_dim_start = (self.config.grid_feature_dim // 2)# * self.config.grid_select_dim
-
+        decoder_feat_dim_start = (self.config.grid_feature_dim)# * self.config.grid_select_dim
+        
         self.decoder = ImageDecoder(input_dim=self.final_dim[0] // 8,
                                     final_dim=self.final_dim[0],
                                     feature_dim=decoder_feat_dim_start,
@@ -491,7 +491,7 @@ class KPlanesModel(Model):
         ray_samples_list = []
         #self.vol_tvs = []
         num_samps = self.config.num_samples*4 # 2**2 for three stages
-        feat_dim = self.start_feat_dim // 2
+        feat_dim = self.start_feat_dim
         curr_dim = [self.final_dim[0] // 2, self.final_dim[1] // 2]
         rgb_images = []
         ray_bundle = ray_bundles[0]
@@ -590,7 +590,7 @@ class KPlanesModel(Model):
         #    reconst_image = reconst_image[:,dim_adder // 2:-(dim_adder // 2),dim_adder // 2:-(dim_adder // 2)]
 
         save_grids = True
-        save_grids = False
+        #save_grids = False
         if save_grids:
             field_grids = []
             feat_coeffs = []
@@ -618,13 +618,17 @@ class KPlanesModel(Model):
                     #print(curr_grid.shape)
                     #if gidx == 0:
                     #    print(curr_grid)
-                    print("{}: {}/{}".format(gidx,np.min(curr_grid),np.max(curr_grid)))
+                    print("{}: {} /  {}:{}  / {}".format(gidx,np.min(curr_grid),np.mean(curr_grid),np.std(curr_grid),np.max(curr_grid)))
+                    grid_maxed = ((np.argmax(curr_grid,axis=0).astype(float) / 64)*255).astype(np.uint8)
+                    
+
+
                     if gidx in [2,4,5]:
-                        grid_min = -10 #np.min(curr_grid)
-                        grid_max = 10 #np.max(curr_grid)
+                        grid_min = np.min(curr_grid,axis=0)
+                        grid_max = np.max(curr_grid,axis=0)
                     else:
-                        grid_min = -10
-                        grid_max = 10
+                        grid_min = np.min(curr_grid,axis=0)
+                        grid_max = np.max(curr_grid,axis=0)
                     #curr_grid = np.clip(curr_grid,grid_min,grid_max)
                     curr_grid = ((curr_grid - grid_min) / (grid_max - grid_min))
                     #curr_grid = curr_grid.astype(np.uint8)
@@ -634,6 +638,7 @@ class KPlanesModel(Model):
                         new_grid[:,ngidx * (curr_grid.shape[2] + 5):(ngidx * (curr_grid.shape[2] + 5)) + curr_grid.shape[2]] = curr_grid[ngidx,:,:]
                     new_grid  = (new_grid * 255).astype(np.uint8)
                     cv2.imwrite("/home/cmaxey/grid_imgs/grid_{}_{}.png".format(coef_idx,grid_nums[gidx]),new_grid)
+                    cv2.imwrite("/home/cmaxey/grid_imgs/grid_{}_{}_maxed.png".format(coef_idx,grid_nums[gidx]),grid_maxed)                    
 
             static_feat_vecs = []
             static_size = 0
@@ -883,8 +888,8 @@ class KPlanesModel(Model):
             #loss_dict["camera_delts"] += (torch.abs(self.pos_diff[non_zero_idxs])*image_diff).mean()
             #loss_dict["camera_delts"] = (torch.abs(self.rot_angs*image_diff)).mean()
             #loss_dict["camera_delts"] += (torch.abs(self.pos_diff*image_diff)).mean()
-            loss_dict["local_vol_tvs"] = 1*local_vol_tvs / 3
-            loss_dict["select_loss"] = 1*select_loss / 3
+            loss_dict["local_vol_tvs"] = 0.01*local_vol_tvs / 3
+            loss_dict["select_loss"] = 0.01*select_loss / 3
             #loss_dict["grid_norm"] = 0.01*grid_norm / (6*len(outputs_lst))
             
             #loss_dict["time_masks"] = time_mask_loss
@@ -1001,10 +1006,12 @@ def l1_time_planes(multi_res_grids: List[torch.Tensor]) -> float:
             #total += torch.abs(1 - grids[grid_id]).mean()
             #total += torch.abs(grids[grid_id][:num_comps]).mean()
             if grid_id in [2,4,5]:
-                #total += torch.abs(grids[grid_id]).mean()
-                total += torch.abs(1-grids[grid_id]).mean()                
+                total += torch.abs(grids[grid_id]).mean()
+                #total += torch.abs(1-grids[grid_id]).mean()                
             else:
-                total += torch.abs(6+grids[grid_id]).mean() # drive it as low as possible to reduce selection of feature vectors
+                total += torch.abs(grids[grid_id]).mean()
+                #total += torch.abs(6+grids[grid_id]).mean()
+                #total += grids[grid_id].mean() # drive it as low as possible to reduce selection of feature vectors                
             
             num_planes += 1
 

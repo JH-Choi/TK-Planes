@@ -689,12 +689,12 @@ class KPlanesEncoding(Encoding):
                 #with torch.no_grad():
                 #    new_plane_coef = new_plane_coef*100
                 #nn.init.uniform_(new_plane_coef, a=init_a, b=init_b)
-                nn.init.uniform_(new_plane_coef, a=-5, b=5)
+                nn.init.uniform_(new_plane_coef, a=0, b=2)
                 #nn.init.normal_(new_plane_coef, 0, 0.5)
             #elif coo_idx > 5:
             #    nn.init.uniform_(new_plane_coef, a=-0.1, b=0.1)
             else:
-                nn.init.uniform_(new_plane_coef, a=-5, b=5) #init_a, b=init_b)
+                nn.init.uniform_(new_plane_coef, a=0, b=2) #init_a, b=init_b)
             #nn.init.uniform_(new_feature_coef, a=-0.1, b=0.1)
             self.plane_coefs.append(new_plane_coef)
             #self.feature_coefs.append(new_feature_coef)
@@ -803,7 +803,6 @@ class KPlanesEncoding(Encoding):
         #test_vec = torch.ones_like(self.feature_coefs[0][0])
         #test_vec[-5] = 0
 
-        xyz_static = (outputs[0] * outputs[1] * outputs[3])
         #               selection_func(outputs[1],**select_kwargs) * 
         #               selection_func(outputs[3],**select_kwargs)).unsqueeze(-1)) * self.feature_coefs[0].unsqueeze(0)
         #xyz_static = (selection_func(outputs[0]*outputs[1]*outputs[3],**select_kwargs).unsqueeze(-1)) * (self.feature_coefs[0].unsqueeze(0))
@@ -819,14 +818,20 @@ class KPlanesEncoding(Encoding):
             feat_coef = feat_coef.astype(np.uint8)
             cv2.imwrite("feat_coef_test.png",feat_coef)
         '''
-        xyz_temporal = outputs[2]*outputs[4]*outputs[5]
+        #xyz_static = (outputs[0] * outputs[1] * outputs[3])        
+        #xyz_temporal = outputs[2]*outputs[4]*outputs[5]
+        #xyz_select = selection_func(xyz_static * xyz_temporal,**select_kwargs)
         #xyz_temporal = time_selection_func(xyz_temporal)
 
+        # [(0,1),(0,2),(0,3), (1,2),(1,3),(2,3)]
+        xyz_alt = (outputs[0] * outputs[5]) + (outputs[1] * outputs[4]) + (outputs[3] * outputs[2])
+        xyz_select = selection_func(xyz_alt,**select_kwargs)        
         #curr_coeffy = torch.nn.functional.normalize(self.feature_coefs[0],p=2,dim=1)
         curr_coeffy = self.feature_coefs[0]
         #print(torch.max(selection_func(xyz_static * xyz_temporal, **select_kwargs)))
         #exit(-1)
-        xyz_select = selection_func(xyz_static * xyz_temporal,**select_kwargs)
+
+
         xyz = (xyz_select.unsqueeze(-1)) * (curr_coeffy.unsqueeze(0))
         xyz = torch.sum(xyz,dim=1)
         #xyz = (selection_func(xyz_static,**select_kwargs).unsqueeze(-1)) * (self.feature_coefs[0].unsqueeze(0))        

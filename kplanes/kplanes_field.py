@@ -192,7 +192,7 @@ class KPlanesField(Field):
                     "activation": "ReLU",
                     #"activation": "LeakyReLU",                    
                     "output_activation": "None",
-                    "n_neurons": (self.geo_feat_dim + 1) * 2, #64
+                    "n_neurons": (self.geo_feat_dim) * 2, #64
                     "n_hidden_layers": 1
                 },
             )
@@ -353,10 +353,8 @@ class KPlanesField(Field):
             rgb = torch.sum(color_features[:, None, :] * basis_values, dim=-1)  # [batch, 3]
             rgb = torch.sigmoid(rgb).view(*output_shape, -1).to(directions)
         else:
-            rgb = self.color_net(color_features)#.view(*output_shape, -1)
+            rgb = self.color_net(color_features).view(*output_shape, -1)
 
-        print(rgb.shape)
-        exit(-1)
         return {FieldHeadNames.RGB: rgb, "vol_tvs": self.vol_tvs} #, "dir_encoding": d}
 
 
