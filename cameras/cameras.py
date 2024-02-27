@@ -445,8 +445,8 @@ class Cameras(TensorDataclass):
             #dim_delts = [0,0,0,0]
             #dwh_delts = [0,0,0,0]
             dim_adder = 0
-            patch_height = 144 + dim_adder
-            patch_width = 128 + dim_adder
+            patch_height = 72 + dim_adder
+            patch_width = 64 + dim_adder
             booly = True
             index_dim = camera_indices.shape[-1]
             index = camera_indices.reshape(-1, index_dim)[0]
@@ -623,7 +623,8 @@ class Cameras(TensorDataclass):
             camera_indices = camera_indices.broadcast_to(coords.shape[:-1] + (len(cameras.shape),)).to(torch.long)
             raybundles = cameras._generate_rays_from_coords(
                 camera_indices, coords, camera_opt_to_camera, distortion_params_delta, disable_distortion=disable_distortion,ray_mult=ray_mult
-            )                
+            )
+
         # If we have mandated that we don't keep the shape, then we flatten
         if keep_shape is False:
             raybundle = raybundle.flatten()

@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple, Type
 
 import numpy as np
+from sklearn.cluster import KMeans
 import cv2
 import random
 import torch
@@ -551,8 +552,8 @@ class KPlanesModel(Model):
             ray_samples = self.proposal_sampler(            
                 ray_bundle, num_samps #, density_fns=density_fns
             )
-
-            self.fields.dynamo = dynamo
+            
+            self.fields[rbidx].dynamo = dynamo
             field_outputs = self.fields[rbidx](ray_samples)
 
             curr_dim_0 = curr_dim[0] + int((dim_adder / (2**(rbidx + 1))))
@@ -590,7 +591,7 @@ class KPlanesModel(Model):
         #    reconst_image = reconst_image[:,dim_adder // 2:-(dim_adder // 2),dim_adder // 2:-(dim_adder // 2)]
 
         save_grids = True
-        #save_grids = False
+        save_grids = False
         if save_grids:
             field_grids = []
             feat_coeffs = []
@@ -598,6 +599,18 @@ class KPlanesModel(Model):
                 for g in field.grids:
                     field_grids.append(g.plane_coefs)
                     feat_coeffs.append(g.feature_coefs)
+            for griddies in field_grids:
+                for curr_grid in griddies:
+                    normed_grid = torch.nn.functional.normalize(curr_grid,p=2,dim=0)
+                    normed_grid = normed_grid.reshape(normed_grid.shape[0],-1)
+                    comp_matrix = torch.matmul(normed_grid.permute(1,0),normed_grid)
+                    print(curr_grid.shape, comp_matrix.shape)
+                    print(comp_matrix)
+                    sorted_vals = torch.sort(torch.sum(comp_matrix,0) / comp_matrix.shape[0],descending=True).values
+                    #kmeans = KMeans(n_clusters=16).fit(sorted_vals)
+                    #print(kmeans.cluster_centers_)
+                    dist = sorted_vals
+                    
             grid_nums = [0,1,2,3,4,5] 
             for coef_idx,coef_grid in enumerate(field_grids):
                 curr_grids = []
@@ -828,8 +841,6 @@ class KPlanesModel(Model):
             #    time_mask_loss += self.rgb_loss((_outputs[5][:,num_comps:]).reshape(-1,10,1),time_mask_alt)
 
 
-            
-            #field_grids = [g.plane_coefs for g in self.field.grids]
             #grid_norm = 0.0
             local_vol_tvs = 0.0
             #outputs_lst = []
@@ -874,6 +885,7 @@ class KPlanesModel(Model):
 
             select_loss = 0
             for select_vec in select_vecs:
+                #continue
                 select_loss += (1 - torch.amax(select_vec,dim=1)).mean()
 
             #for grid_idx,grids in enumerate(field_grids):
@@ -888,8 +900,8 @@ class KPlanesModel(Model):
             #loss_dict["camera_delts"] += (torch.abs(self.pos_diff[non_zero_idxs])*image_diff).mean()
             #loss_dict["camera_delts"] = (torch.abs(self.rot_angs*image_diff)).mean()
             #loss_dict["camera_delts"] += (torch.abs(self.pos_diff*image_diff)).mean()
-            loss_dict["local_vol_tvs"] = 0.01*local_vol_tvs / 3
-            loss_dict["select_loss"] = 0.01*select_loss / 3
+            loss_dict["local_vol_tvs"] = 0.001*local_vol_tvs / 3
+            loss_dict["select_loss"] = 0.001*select_loss / 3
             #loss_dict["grid_norm"] = 0.01*grid_norm / (6*len(outputs_lst))
             
             #loss_dict["time_masks"] = time_mask_loss
@@ -995,8 +1007,8 @@ def l1_time_planes(multi_res_grids: List[torch.Tensor]) -> float:
     Returns:
          L1 distance from the multiplicative identity (1)
     """
-    #time_planes = [2, 4, 5]  # These are the spatiotemporal planes
-    time_planes = [0, 1, 2, 3, 4, 5] #, 6, 7, 8]  # zero for all planes, try to limit selection of features used
+    time_planes = [2, 4, 5]  # These are the spatiotemporal planes
+    #time_planes = [0, 1, 2, 3, 4, 5] #, 6, 7, 8]  # zero for all planes, try to limit selection of features used
     #time_planes = [4, 5, 7, 8, 10, 11]  # These are the spatiotemporal planes    
     total = 0.0
     num_comps = multi_res_grids[0][0].shape[0]
@@ -1006,12 +1018,13 @@ def l1_time_planes(multi_res_grids: List[torch.Tensor]) -> float:
             #total += torch.abs(1 - grids[grid_id]).mean()
             #total += torch.abs(grids[grid_id][:num_comps]).mean()
             if grid_id in [2,4,5]:
-                total += torch.abs(grids[grid_id]).mean()
-                #total += torch.abs(1-grids[grid_id]).mean()                
+                #total += torch.abs(grids[grid_id]).mean()
+                #total += torch.abs(1-grids[grid_id]).mean()
+                total += -grids[grid_id].mean()                
             else:
-                total += torch.abs(grids[grid_id]).mean()
+                #total += torch.abs(grids[grid_id]).mean()
                 #total += torch.abs(6+grids[grid_id]).mean()
-                #total += grids[grid_id].mean() # drive it as low as possible to reduce selection of feature vectors                
+                total += grids[grid_id].mean() # drive it as low as possible to reduce selection of feature vectors                
             
             num_planes += 1
 
