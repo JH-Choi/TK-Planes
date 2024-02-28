@@ -638,7 +638,9 @@ class KPlanesEncoding(Encoding):
                 f"or 4 (dynamic scenes). Found resolution with {self.in_dim} dimensions."
             )
         has_time_planes = self.in_dim == 4
-
+        self.proc_coef_counter = 0
+        self.proc_coef_limit = 10000
+        self.run_coef_proc = False
         self.dynamo = False
         self.proc_func = torch.nn.Identity()
         #self.proc_func = torch.nn.Tanh()
@@ -656,8 +658,8 @@ class KPlanesEncoding(Encoding):
         self.feature_coefs = []
         #self.feature_coefs.append(nn.Parameter(torch.empty([len(self.coo_combs),self.select_dim[0], self.num_components])))
         #self.feature_coefs.append(nn.Parameter(torch.empty([len(self.coo_combs),self.select_dim[1], self.num_components])))
-        #self.feature_coefs.append(nn.Parameter(torch.empty([len(self.coo_combs),self.select_dim, self.num_components])))        
-        self.feature_coefs.append(nn.Parameter(torch.empty([self.select_dim, self.num_components])))
+        self.feature_coefs.append(nn.Parameter(torch.empty([len(self.coo_combs),self.select_dim, self.num_components]),requires_grad=False))        
+        #self.feature_coefs.append(nn.Parameter(torch.empty([self.select_dim, self.num_components])))
 
         self.feature_coefs = nn.ParameterList(self.feature_coefs)
         nn.init.normal_(self.feature_coefs[0], 0, 1)
@@ -673,11 +675,11 @@ class KPlanesEncoding(Encoding):
         for coo_idx,coo_comb in enumerate(self.coo_combs):
 
             if 3 in coo_comb:
-                num_comps = self.select_dim#*self.num_components
-                #num_comps = self.num_components                
+                #num_comps = self.select_dim#*self.num_components
+                num_comps = self.num_components                
             else:
-                num_comps = self.select_dim
-                #num_comps = self.num_components                                
+                #num_comps = self.select_dim
+                num_comps = self.num_components                                
                 
             new_plane_coef = nn.Parameter(
                 torch.empty([num_comps] + [self.resolution[cc] for cc in coo_comb[::-1]])
@@ -692,12 +694,12 @@ class KPlanesEncoding(Encoding):
                 #with torch.no_grad():
                 #    new_plane_coef = new_plane_coef*100
                 #nn.init.uniform_(new_plane_coef, a=init_a, b=init_b)
-                nn.init.uniform_(new_plane_coef, a=-5, b=5)
+                nn.init.uniform_(new_plane_coef, a=0.2, b=0.9)
                 #nn.init.normal_(new_plane_coef, 0, 0.5)
             #elif coo_idx > 5:
             #    nn.init.uniform_(new_plane_coef, a=-0.1, b=0.1)
             else:
-                nn.init.uniform_(new_plane_coef, a=-5, b=5) #init_a, b=init_b)
+                nn.init.uniform_(new_plane_coef, a=0.2, b=0.9) #init_a, b=init_b)
             #nn.init.uniform_(new_feature_coef, a=-0.1, b=0.1)
             self.plane_coefs.append(new_plane_coef)
             #self.feature_coefs.append(new_feature_coef)
@@ -707,18 +709,6 @@ class KPlanesEncoding(Encoding):
         total_comps = (self.select_dim)* self.num_components
         out_comps = self.num_components
 
-        self.sum_feature_vecs = nn.Sequential(
-            nn.Linear(total_comps, total_comps*2, bias=bias_bool),
-            #nn.LayerNorm(total_comps*4),
-            #nn.LeakyReLU(0.02),
-            #nn.Linear(total_comps*2, total_comps*2, bias=bias_bool),
-            #nn.LayerNorm(total_comps*4),            
-            #nn.LeakyReLU(0.02),
-            #nn.Linear(total_comps*4, total_comps*4, bias=bias_bool),
-            #nn.LayerNorm(total_comps*4),
-            nn.LeakyReLU(0.02),            
-            nn.Linear(total_comps*2, out_comps, bias=bias_bool))        
-        
         self.output_head = nn.Identity()
         '''
         self.output_head = nn.Sequential(
@@ -734,6 +724,119 @@ class KPlanesEncoding(Encoding):
             nn.Linear(total_comps*2, out_comps, bias=bias_bool))
         '''
 
+    def process_feature_coefs(self):
+        with torch.no_grad():
+            for gidx,grid in enumerate(self.plane_coefs):
+                normed_grid = torch.nn.functional.normalize(grid,p=2,dim=0)
+                normed_grid = normed_grid.reshape(normed_grid.shape[0],-1)
+                comp_matrix = torch.matmul(normed_grid.permute(1,0),normed_grid)
+                sorted_vecs = torch.sort(torch.sum(comp_matrix,0) / comp_matrix.shape[0],descending=True)
+                sorted_indices = sorted_vecs.indices
+                bins = self.calc_bins(sorted_vecs.values)
+                reorged_grid = grid.reshape(grid.shape[0],-1).permute(1,0)
+                reorged_grid = reorged_grid[sorted_indices]
+                for i in range(self.select_dim):
+                    start = bins[i][0]
+                    end = bins[i][1] + 1
+                    self.feature_coefs[0][gidx,i] = reorged_grid[start:end].mean(dim=0)
+                    reorged_grid[start:end] = reorged_grid[start:end].mean(dim=0)
+                reset_indices = torch.sort(sorted_indices).indices
+                reorged_grid = reorged_grid[reset_indices]
+                self.plane_coefs[gidx] = (reorged_grid.permute(1,0)).reshape(grid.shape)
+                
+    def calc_bins(self,x):
+        bin_num = self.select_dim
+        iters = 50
+        diff = x.shape[0] // (bin_num - 1)
+        bins = [[i,min(x.shape[0]-1,i+diff - 1)] for i in range(0,x.shape[0],diff)]
+        for _ in range(iters):
+            x_dists = []
+            for bin in bins:
+                x_mean = x[bin[0]:bin[1]].mean()
+                x_dist = torch.sum(torch.abs(x[bin[0]:bin[1]] - x_mean))
+                x_dists.append(x_dist)
+                
+        for idx,x_dist in enumerate(x_dists):
+            if idx < len(x_dists) - 1:
+                if (x_dist < x_dists[idx+1] and (bins[idx+1][1] - bins[idx+1][0]) > 1):
+                    bins[idx][1] += 1
+                    bins[idx+1][0] += 1
+                elif x_dist > x_dists[idx+1] and (bins[idx][1] - bins[idx][0]) > 1:
+                    bins[idx][1] -= 1
+                    bins[idx+1][0] -= 1
+        return bins
+
+    def process_feature_coefs2(self):
+        bin_num = self.select_dim
+        num_iters = 3
+        with torch.no_grad():
+            
+            for gidx,grid in enumerate(self.plane_coefs):
+                print('GRID {}/{} PROCESSING'.format(gidx+1,len(self.plane_coefs)))
+                grid_r = grid.reshape(grid.shape[0],-1).permute(1,0)
+                sets = [set() for _ in range(bin_num)]
+                #means = torch.zeros(bin_num).to(grid.device)
+                means = [None for _ in range(bin_num)]
+                bins = self.calc_bins2(grid_r)
+                
+                for bidx,bin in enumerate(bins):
+                    curr_set = sets[bidx]
+                    mean_val = 0
+                    for xidx in range(bin[0],bin[1]+1):
+                        curr_set.add(xidx)
+                        mean_val += grid_r[xidx]
+                    mean_val = mean_val / len(curr_set)
+                    means[bidx] = mean_val
+
+                for nitdx in range(num_iters):
+                    print("{} kmeans iter of {}".format(1+nitdx,num_iters))
+                    new_sets = [set() for _ in range(bin_num)]
+                    for curr_set in sets:
+                        for xidx in curr_set:
+                            best_set = None
+                            best_dist = None
+                            
+                            for midx,curr_mean in enumerate(means):
+                                curr_dist = torch.sum(torch.sqrt((grid_r[xidx] - curr_mean)**2))
+                                if best_dist is None or curr_dist < best_dist:
+                                    best_set = midx
+                                    best_dist = curr_dist
+
+                            new_sets[best_set].add(xidx)
+                    means = [None for _ in range(bin_num)]
+                    for cidx,curr_set in enumerate(new_sets):
+                        mean_val = 0
+                        for xidx in curr_set:
+                            mean_val += grid_r[xidx]
+                        if len(curr_set) > 0:
+                            mean_val = mean_val / len(curr_set)
+                        means[cidx] = mean_val
+                    sets = new_sets
+
+                num_zero_sets = 0
+                for cidx,curr_set in enumerate(sets):
+                    mean_val = means[cidx]
+                    if len(curr_set) == 0:
+                        num_zero_sets += 1
+                    for xidx in curr_set:
+                        grid_r[xidx] = mean_val
+
+                if num_zero_sets > 0:
+                    print("{} ZERO SETS OUT OF {}".format(num_zero_sets,bin_num))
+                self.plane_coefs[gidx] = grid_r.permute(1,0).reshape(grid.shape)
+                
+
+    def calc_bins2(self,x):
+        bin_num = self.select_dim
+        diff = x.shape[0] // (bin_num)
+        bins = []
+        for i in range(bin_num):
+            if i < bin_num - 1:
+                bins.append([i*diff,(i+1)*diff])
+            else:
+                bins.append([i*diff,x.shape[0]-1])
+        return bins
+                
     def get_out_dim(self) -> int:
         return total_comps
 
@@ -744,6 +847,12 @@ class KPlanesEncoding(Encoding):
         """Sample features from this encoder. Expects ``in_tensor`` to be in range [-1, 1]"""
         original_shape = in_tensor.shape
 
+        self.proc_coef_counter = (self.proc_coef_counter + 1) % self.proc_coef_limit
+
+        if self.proc_coef_counter == 0 and self.run_coef_proc:
+            self.process_feature_coefs2()
+            print('DONE PROCESSING')
+        
         assert any(self.coo_combs)
         output = 1.0 if self.reduce == "product" else 0.0  # identity for corresponding op
         #time_output = 1.0 if self.reduce == "product" else 0.0  # identity for corresponding op
@@ -772,11 +881,11 @@ class KPlanesEncoding(Encoding):
             #    print(interp.shape)
 
             if 3 in coo_comb:
-                num_comps = self.select_dim#*self.num_components
-                #num_comps = self.num_components                                
+                #num_comps = self.select_dim#*self.num_components
+                num_comps = self.num_components                                
             else:
-                num_comps = self.select_dim
-                #num_comps = self.num_components                                
+                #num_comps = self.select_dim
+                num_comps = self.num_components                                
                 
             interp = interp.view(num_comps, -1).T  # [flattened_bs, output_dim]
 
@@ -816,8 +925,8 @@ class KPlanesEncoding(Encoding):
         #xyz_temporal = (outputs[2]*outputs[4]*outputs[5]*
         #                outputs[6]*outputs[7]*outputs[8])
 
-        #selection_func = torch.nn.Identity()
-        selection_func = torch.sigmoid
+        selection_func = torch.nn.Identity()
+        #selection_func = torch.sigmoid
         #time_selection_func = torch.tanh
         select_kwargs = {}        
         #selection_func = torch.softmax
@@ -841,8 +950,8 @@ class KPlanesEncoding(Encoding):
             cv2.imwrite("feat_coef_test.png",feat_coef)
         '''
         
-        xyz_static = (outputs[0] * outputs[1] * outputs[3])        
-        xyz_temporal = outputs[2]*outputs[4]*outputs[5]
+        xyz_static = (outputs[0]*outputs[1]*outputs[3])        
+        xyz_temporal = (outputs[2]*outputs[4]*outputs[5])
         #xyz_select = selection_func(xyz_static * xyz_temporal *100000,**select_kwargs)
         xyz_select = selection_func(xyz_static * xyz_temporal,**select_kwargs)        
         #xyz_temporal = time_selection_func(xyz_temporal)
@@ -851,7 +960,7 @@ class KPlanesEncoding(Encoding):
         #xyz_alt = (outputs[0] * outputs[5]) + (outputs[1] * outputs[4]) + (outputs[3] * outputs[2])
         #xyz_select = selection_func(xyz_alt,**select_kwargs)        
         #curr_coeffy = torch.nn.functional.normalize(self.feature_coefs[0],p=2,dim=1)
-        curr_coeffy = self.feature_coefs[0]
+        #curr_coeffy = self.feature_coefs[0]
         #print(torch.max(selection_func(xyz_static * xyz_temporal, **select_kwargs)))
         #exit(-1)
         #xyz_max = torch.amax(xyz_select,dim=1).unsqueeze(-1)
@@ -859,13 +968,12 @@ class KPlanesEncoding(Encoding):
         #xyz_select[xyz_mask] = 1
         #xyz_select[~xyz_mask] = 0
         
-        xyz = (xyz_select.unsqueeze(-1)) * (curr_coeffy.unsqueeze(0))
-        xyz = xyz.reshape(xyz.shape[0],-1)        
+        #xyz = (xyz_select.unsqueeze(-1)) * (curr_coeffy.unsqueeze(0))
+        #xyz = xyz.reshape(xyz.shape[0],-1)        
         #xyz = torch.sum(xyz,dim=1)
         #print(xyz.shape)
         #exit(-1)
-        xyz = self.sum_feature_vecs(xyz)
-        #xyz = xyz_select
+        xyz = xyz_select
         #xyz = (selection_func(xyz_static,**select_kwargs).unsqueeze(-1)) * (self.feature_coefs[0].unsqueeze(0))        
         #xyz = xyz.reshape(xyz.shape[0],-1)
 

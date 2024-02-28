@@ -848,7 +848,7 @@ class KPlanesModel(Model):
             local_vol_tvs_arr = []
             val_mults = []
             for odx,_outputs in enumerate(outputs_lst):
-                #continue
+                continue
                 val_mults.append(_outputs[0].shape[-1])
                 total_val += _outputs[0].shape[-1]
                 o0 = torch.nn.functional.normalize(_outputs[0],p=2,dim=1)
@@ -885,7 +885,7 @@ class KPlanesModel(Model):
 
             select_loss = 0
             for select_vec in select_vecs:
-                #continue
+                continue
                 select_loss += (1 - torch.amax(select_vec,dim=1)).mean()
 
             #for grid_idx,grids in enumerate(field_grids):
@@ -900,8 +900,8 @@ class KPlanesModel(Model):
             #loss_dict["camera_delts"] += (torch.abs(self.pos_diff[non_zero_idxs])*image_diff).mean()
             #loss_dict["camera_delts"] = (torch.abs(self.rot_angs*image_diff)).mean()
             #loss_dict["camera_delts"] += (torch.abs(self.pos_diff*image_diff)).mean()
-            loss_dict["local_vol_tvs"] = 0.001*local_vol_tvs / 3
-            loss_dict["select_loss"] = 0.001*select_loss / 3
+            #loss_dict["local_vol_tvs"] = 0.001*local_vol_tvs / 3
+            #loss_dict["select_loss"] = 0.001*select_loss / 3
             #loss_dict["grid_norm"] = 0.01*grid_norm / (6*len(outputs_lst))
             
             #loss_dict["time_masks"] = time_mask_loss
