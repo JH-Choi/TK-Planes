@@ -144,8 +144,8 @@ kplanes_dynamic_method = MethodSpecification(
                 eval_num_rays_per_chunk=1 << 2,
                 #grid_base_resolution=[8, 8, 8, 77],  # time-resolution should be half the time-steps
                 grid_base_resolution=[16, 16, 16, 77],  # time-resolution should be half the time-steps                
-                grid_feature_dim=64,
-                grid_select_dim=64,
+                grid_feature_dim=256,
+                grid_select_dim=128,
                 patch_size=[72,64],
                 #patch_size=[144,128],
                 #patch_size=[144,160],                
@@ -168,7 +168,7 @@ kplanes_dynamic_method = MethodSpecification(
                 loss_coefficients={
                     "interlevel": 1.0,
                     "distortion": 0.01,
-                    "plane_tv": 0.1,
+                    "plane_tv": 0.01,
                     "plane_tv_proposal_net": 0.0001,
                     "l1_time_planes": 0.00001,
                     "l1_time_planes_proposal_net": 0.001,
@@ -183,11 +183,11 @@ kplanes_dynamic_method = MethodSpecification(
             #    "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=100000),
             #},
             "fields": {
-                "optimizer": AdamOptimizerConfig(lr=1e-4, eps=1e-12),
+                "optimizer": AdamOptimizerConfig(lr=3e-5, eps=1e-12),
                 "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=1000000),
             },
             "decoder": {
-                "optimizer": AdamOptimizerConfig(lr=1e-4, eps=1e-12),
+                "optimizer": AdamOptimizerConfig(lr=3e-5, eps=1e-12),
                 "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=1000000),
             },
             #"ray_bundle_encoder": {

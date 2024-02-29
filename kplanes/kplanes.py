@@ -657,7 +657,7 @@ class KPlanesModel(Model):
             static_size = 0
             static_min = None
             static_max = None
-
+            exit(-1)
             for odx,_outputs in enumerate(feat_coeffs):
                 static = _outputs[0].detach().cpu().numpy()
                 static_size += static.shape[-1]
@@ -1019,12 +1019,12 @@ def l1_time_planes(multi_res_grids: List[torch.Tensor]) -> float:
             #total += torch.abs(grids[grid_id][:num_comps]).mean()
             if grid_id in [2,4,5]:
                 #total += torch.abs(grids[grid_id]).mean()
-                #total += torch.abs(1-grids[grid_id]).mean()
-                total += -grids[grid_id].mean()                
+                total += torch.abs(1-grids[grid_id]).mean()
+                #total += -grids[grid_id].mean()                
             else:
-                #total += torch.abs(grids[grid_id]).mean()
+                total += torch.abs(grids[grid_id]).mean()
                 #total += torch.abs(6+grids[grid_id]).mean()
-                total += grids[grid_id].mean() # drive it as low as possible to reduce selection of feature vectors                
+                #total += grids[grid_id].mean() # drive it as low as possible to reduce selection of feature vectors                
             
             num_planes += 1
 
