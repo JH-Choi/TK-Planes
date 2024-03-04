@@ -87,7 +87,7 @@ class KPlanesModelConfig(ModelConfig):
     grid_feature_dim: int = 32
     """Dimension of feature vectors stored in grid."""
 
-    grid_select_dim: int = field(default_factory=lambda: 64)
+    grid_select_dim: List[int] = field(default_factory=lambda: [32,16])
     """Dimension of feature vectors stored in grid."""    
 
     multiscale_res: List[int] = field(default_factory=lambda: [1, 2, 4])
