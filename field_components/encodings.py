@@ -20,6 +20,7 @@ import itertools
 from abc import abstractmethod
 from typing import Literal, Optional, Sequence, List
 
+import random
 import numpy as np
 import cv2
 import torch
@@ -639,7 +640,7 @@ class KPlanesEncoding(Encoding):
             )
         has_time_planes = self.in_dim == 4
         self.proc_coef_counter = 0
-        self.proc_coef_limit = 10000
+        self.proc_coef_limit = 1000
         self.run_coef_proc = False
         self.dynamo = False
         self.proc_func = torch.nn.Identity()
@@ -785,6 +786,7 @@ class KPlanesEncoding(Encoding):
                     for xidx in range(bin[0],bin[1]+1):
                         curr_set.add(xidx)
                         mean_val += grid_r[xidx]
+
                     mean_val = mean_val / len(curr_set)
                     means[bidx] = mean_val
 
@@ -824,7 +826,52 @@ class KPlanesEncoding(Encoding):
                 if num_zero_sets > 0:
                     print("{} ZERO SETS OUT OF {}".format(num_zero_sets,bin_num))
                 self.plane_coefs[gidx] = grid_r.permute(1,0).reshape(grid.shape)
-                
+
+    def process_feature_coefs3(self):
+        bin_num = self.select_dim
+        num_iters = 5
+        with torch.no_grad():
+            
+            for gidx,grid in enumerate(self.plane_coefs):
+                #print('GRID {}/{} PROCESSING'.format(gidx+1,len(self.plane_coefs)))
+                grid_r = grid.reshape(grid.shape[0],-1).permute(1,0)
+                sets = [set() for _ in range(bin_num)]
+                means = torch.zeros((bin_num,grid_r.shape[-1])).to(grid.device)
+                bins = self.calc_bins2(grid_r)
+                init_indices = [i for i in range(grid_r.shape[0])]
+                random.shuffle(init_indices)
+                for bidx,bin in enumerate(bins):
+                    sets[bidx].update(init_indices[bin[0]:bin[1]+1])
+                    means[bidx] = grid_r[bin[0]:bin[1]+1].mean(0)
+
+                for nitdx in range(num_iters):
+                    #print("{} kmeans iter of {}".format(1+nitdx,num_iters))
+                    new_sets = [set() for _ in range(bin_num)]
+                    for setidx, curr_set in enumerate(sets):
+                        curr_set_list = list(curr_set)
+                        dists = torch.sqrt(torch.sum((grid_r[curr_set_list].unsqueeze(1) - means.unsqueeze(0))**2,dim=-1))
+                        best_sets = torch.argmin(dists,dim=-1)
+                        for sidx, xidx in enumerate(curr_set_list):
+                            #dists = torch.sqrt(torch.sum((grid_r[xidx] - means)**2,dim=1))
+                            #best_set = torch.argmin(dists)
+                            new_sets[best_sets[sidx]].add(xidx)
+
+                    for cidx,curr_set in enumerate(new_sets):
+                        if len(curr_set) > 0:
+                            means[cidx] = grid_r[list(curr_set)].mean(0)
+                        else:
+                            means[cidx] = 0
+                    sets = new_sets
+
+                #num_zero_sets = 0
+                for cidx,curr_set in enumerate(sets):
+                    grid_r[list(curr_set)] = means[cidx]
+                    #if len(curr_set) == 0:
+                    #    num_zero_sets += 1
+
+                #if num_zero_sets > 0:
+                    #print("{} ZERO SETS OUT OF {}".format(num_zero_sets,bin_num))
+                self.plane_coefs[gidx] = grid_r.permute(1,0).reshape(grid.shape)
 
     def calc_bins2(self,x):
         bin_num = self.select_dim
@@ -850,8 +897,8 @@ class KPlanesEncoding(Encoding):
         self.proc_coef_counter = (self.proc_coef_counter + 1) % self.proc_coef_limit
 
         if self.proc_coef_counter == 0 and self.run_coef_proc:
-            self.process_feature_coefs2()
-            print('DONE PROCESSING')
+            self.process_feature_coefs3()
+            #print('DONE PROCESSING')
         
         assert any(self.coo_combs)
         output = 1.0 if self.reduce == "product" else 0.0  # identity for corresponding op
@@ -866,7 +913,7 @@ class KPlanesEncoding(Encoding):
             #    grid = self.time_freq_conv[0](grid) + grid
             #    grid = torch.fft.ifft2(grid).type(grid_type)
             coords = in_tensor[..., coo_comb].view(1, 1, -1, 2)  # [1, 1, flattened_bs, 2]
-            if 3 in coo_comb and not self.dynamo:
+            if 3 in coo_comb and not self.dynamo and False:
                 #new_time = (torch.rand(1) - 0.5) * 2
                 new_time = torch.clip((torch.normal(coords[0,0,0,0],0.1) - 0.5) * 2,-1,1)
                 coords[:,:,:,1] = new_time

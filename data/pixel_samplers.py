@@ -628,9 +628,10 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
                 self.dh_lst = self.dh_lst[:,self.reorder]
 
             dynamo = 0
-            if random.random() < 0.5:
+            if random.random() < 0.75:
                 dw = self.dw_lst[:,0]
                 dh = self.dh_lst[:,0]
+                '''
                 curr_centers = self.centers[curr_select_idxs[0]]
                 for curr_center in curr_centers:
                     curr_x = int(curr_center[0] * 1280)
@@ -638,6 +639,7 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
                     if (curr_x >= (dw - 10) and curr_x <= (dw + self.patch_size[1] + 10) and
                         curr_y >= (dh - 30) and curr_y <= (dh + self.patch_size[0] + 30)):
                         dynamo = 1
+                '''
                 self.dw_lst = self.dw_lst[:,1:]
                 self.dh_lst = self.dh_lst[:,1:]
             else:

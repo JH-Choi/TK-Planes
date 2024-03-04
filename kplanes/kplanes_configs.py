@@ -119,10 +119,10 @@ kplanes_dynamic_method = MethodSpecification(
     config=TrainerConfig(
         method_name="kplanes-dynamic",
         gradient_accumulation_steps=1,
-        steps_per_eval_batch=1000001,
+        steps_per_eval_batch=1500001,
         steps_per_save=100,
-        steps_per_eval_all_images=1000001,
-        max_num_iterations=1000001,
+        steps_per_eval_all_images=1500001,
+        max_num_iterations=1500001,
         mixed_precision=True,
         pipeline=VanillaPipelineConfig(
             datamanager=VanillaDataManagerConfig(
@@ -144,8 +144,8 @@ kplanes_dynamic_method = MethodSpecification(
                 eval_num_rays_per_chunk=1 << 2,
                 #grid_base_resolution=[8, 8, 8, 77],  # time-resolution should be half the time-steps
                 grid_base_resolution=[16, 16, 16, 77],  # time-resolution should be half the time-steps                
-                grid_feature_dim=256,
-                grid_select_dim=128,
+                grid_feature_dim=512,
+                grid_select_dim=32,
                 patch_size=[72,64],
                 #patch_size=[144,128],
                 #patch_size=[144,160],                
@@ -184,11 +184,11 @@ kplanes_dynamic_method = MethodSpecification(
             #},
             "fields": {
                 "optimizer": AdamOptimizerConfig(lr=3e-5, eps=1e-12),
-                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=1000000),
+                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=1500000),
             },
             "decoder": {
                 "optimizer": AdamOptimizerConfig(lr=3e-5, eps=1e-12),
-                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=1000000),
+                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=1500000),
             },
             #"ray_bundle_encoder": {
             #    "optimizer": AdamOptimizerConfig(lr=1e-5, eps=1e-12),
