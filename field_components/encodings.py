@@ -630,8 +630,10 @@ class KPlanesEncoding(Encoding):
         super().__init__(in_dim=len(resolution))
 
         self.resolution = resolution
+        self.resolution_dyn = [resolution[0] // 4, resolution[1] // 4, resolution[2] // 4, resolution[3]]
         self.num_components = num_components
         self.select_dim = select_dim
+        self.select_dim_dyn = select_dim // 4
         self.reduce = reduce
         if self.in_dim not in {3, 4}:
             raise ValueError(
@@ -641,7 +643,7 @@ class KPlanesEncoding(Encoding):
         has_time_planes = self.in_dim == 4
         self.proc_coef_counter = 0
         self.proc_coef_limit = 1000
-        self.run_coef_proc = False
+        self.run_coef_proc = True
         self.dynamo = False
         self.proc_func = torch.nn.Identity()
         #self.proc_func = torch.nn.Tanh()
@@ -654,7 +656,7 @@ class KPlanesEncoding(Encoding):
         # Dynamic models (in_dim == 4) will have 6 planes:
         # (y, x), (z, x), (t, x), (z, y), (t, y), (t, z)
         # static models (in_dim == 3) will only have the 1st, 2nd and 4th planes.
-        self.coo_combs = [(0,1),(0,2),(0,3), (1,2),(1,3),(2,3)]
+        self.coo_combs = [(0,1),(0,2),(0,3), (1,2),(1,3),(2,3), (0,1),(0,2),(1,2)]
         self.plane_coefs = nn.ParameterList()
         self.feature_coefs = []
         #self.feature_coefs.append(nn.Parameter(torch.empty([len(self.coo_combs),self.select_dim[0], self.num_components])))
@@ -675,15 +677,19 @@ class KPlanesEncoding(Encoding):
 
         for coo_idx,coo_comb in enumerate(self.coo_combs):
 
-            if 3 in coo_comb:
+            if 3 in coo_comb or coo_idx > 5:
                 #num_comps = self.select_dim#*self.num_components
-                num_comps = self.num_components                
+                num_comps = self.num_components
+                curr_resolution = self.resolution_dyn
             else:
                 #num_comps = self.select_dim
-                num_comps = self.num_components                                
-                
+                num_comps = self.num_components
+                curr_resolution = self.resolution                
+
+
+            
             new_plane_coef = nn.Parameter(
-                torch.empty([num_comps] + [self.resolution[cc] for cc in coo_comb[::-1]])
+                torch.empty([num_comps] + [curr_resolution[cc] for cc in coo_comb[::-1]])
             )
             #new_feature_coef = nn.Parameter(
             #    torch.empty([self.select_dim, self.num_components])
@@ -828,16 +834,18 @@ class KPlanesEncoding(Encoding):
                 self.plane_coefs[gidx] = grid_r.permute(1,0).reshape(grid.shape)
 
     def process_feature_coefs3(self):
-        bin_num = self.select_dim
-        num_iters = 5
+        num_iters = 3
         with torch.no_grad():
             
             for gidx,grid in enumerate(self.plane_coefs):
+                bin_num = self.select_dim
+                if gidx in [2,4,5,6,7,8]:
+                    bin_num = self.select_dim_dyn
                 #print('GRID {}/{} PROCESSING'.format(gidx+1,len(self.plane_coefs)))
                 grid_r = grid.reshape(grid.shape[0],-1).permute(1,0)
                 sets = [set() for _ in range(bin_num)]
                 means = torch.zeros((bin_num,grid_r.shape[-1])).to(grid.device)
-                bins = self.calc_bins2(grid_r)
+                bins = self.calc_bins2(grid_r,bin_num)
                 init_indices = [i for i in range(grid_r.shape[0])]
                 random.shuffle(init_indices)
                 for bidx,bin in enumerate(bins):
@@ -873,8 +881,7 @@ class KPlanesEncoding(Encoding):
                     #print("{} ZERO SETS OUT OF {}".format(num_zero_sets,bin_num))
                 self.plane_coefs[gidx] = grid_r.permute(1,0).reshape(grid.shape)
 
-    def calc_bins2(self,x):
-        bin_num = self.select_dim
+    def calc_bins2(self,x,bin_num):
         diff = x.shape[0] // (bin_num)
         bins = []
         for i in range(bin_num):
@@ -998,9 +1005,11 @@ class KPlanesEncoding(Encoding):
         '''
         
         xyz_static = (outputs[0]*outputs[1]*outputs[3])        
-        xyz_temporal = (outputs[2]*outputs[4]*outputs[5])
+        xyz_temporal = (outputs[2]*outputs[4]*outputs[5]*outputs[6]*outputs[7]*outputs[8])
         #xyz_select = selection_func(xyz_static * xyz_temporal *100000,**select_kwargs)
-        xyz_select = selection_func(xyz_static * xyz_temporal,**select_kwargs)        
+        xyz_select = selection_func(xyz_static * xyz_temporal,**select_kwargs)
+        xyz_select = torch.cat([xyz_static,xyz_temporal],dim=-1)
+
         #xyz_temporal = time_selection_func(xyz_temporal)
 
         # [(0,1),(0,2),(0,3), (1,2),(1,3),(2,3)]

@@ -87,7 +87,7 @@ class KPlanesModelConfig(ModelConfig):
     grid_feature_dim: int = 32
     """Dimension of feature vectors stored in grid."""
 
-    grid_select_dim: List[int] = field(default_factory=lambda: [32,16])
+    grid_select_dim: int = field(default_factory=lambda: 32)
     """Dimension of feature vectors stored in grid."""    
 
     multiscale_res: List[int] = field(default_factory=lambda: [1, 2, 4])
@@ -277,7 +277,7 @@ class KPlanesModel(Model):
         
         self.decoder = ImageDecoder(input_dim=self.final_dim[0] // 8,
                                     final_dim=self.final_dim[0],
-                                    feature_dim=decoder_feat_dim_start,
+                                    feature_dim=2*decoder_feat_dim_start,
                                     mode='upscale')
         
         self.density_fns = []
@@ -575,9 +575,9 @@ class KPlanesModel(Model):
             self.vol_tvs.append(field_outputs["vol_tvs"]) #[0])
 
             if orig_shape is None:
-                rgb_image = rgb.reshape((-1,curr_dim_0,curr_dim_1,feat_dim)) #.transpose(2,0,1)
+                rgb_image = rgb.reshape((-1,curr_dim_0,curr_dim_1,2*feat_dim)) #.transpose(2,0,1)
             else:
-                rgb_image = rgb.reshape((1,) + orig_shape + (feat_dim,))
+                rgb_image = rgb.reshape((1,) + orig_shape + (2*feat_dim,))
 
             
             rgb_image = rgb_image.permute(0,3,1,2)
@@ -986,7 +986,7 @@ def space_tv_loss(multi_res_grids: List[torch.Tensor]) -> float:
         if len(grids) == 3:
             spatial_planes = {0, 1, 2}
         else:
-            spatial_planes = {0, 1, 3} #, 6, 7, 8} #3}
+            spatial_planes = {0, 1, 3, 6, 7, 8} #3}
 
         for grid_id, grid in enumerate(grids):
             if grid_id in spatial_planes:
@@ -1018,8 +1018,8 @@ def l1_time_planes(multi_res_grids: List[torch.Tensor]) -> float:
             #total += torch.abs(1 - grids[grid_id]).mean()
             #total += torch.abs(grids[grid_id][:num_comps]).mean()
             if grid_id in [2,4,5]:
-                #total += torch.abs(grids[grid_id]).mean()
-                total += torch.abs(1-grids[grid_id]).mean()
+                total += torch.abs(grids[grid_id]).mean()
+                #total += torch.abs(1-grids[grid_id]).mean()
                 #total += -grids[grid_id].mean()                
             else:
                 total += torch.abs(grids[grid_id]).mean()

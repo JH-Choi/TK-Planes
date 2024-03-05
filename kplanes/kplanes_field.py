@@ -183,8 +183,8 @@ class KPlanesField(Field):
         else:
             #print('SIGMA: {}, {}'.format(self.feature_dim, self.geo_feat_dim * 2))
             self.sigma_net = tcnn.Network(
-                n_input_dims=self.feature_dim,
-                n_output_dims=self.geo_feat_dim + 1,
+                n_input_dims=self.feature_dim*2,
+                n_output_dims=self.geo_feat_dim*2 + 1,
                 #n_output_dims=self.geo_feat_dim * 2, #+ 1,                
                 network_config={
                     "otype": "CutlassMLP",
@@ -204,13 +204,13 @@ class KPlanesField(Field):
                 },
             )
             in_dim_color = (
-                self.direction_encoding.n_output_dims + self.geo_feat_dim + self.appearance_embedding_dim
+                self.direction_encoding.n_output_dims + (2*self.geo_feat_dim) + self.appearance_embedding_dim
                 #self.geo_feat_dim - 1 + self.appearance_embedding_dim                
             )
             #print('COLOR: {}, {}, {}'.format(self.direction_encoding.n_output_dims,in_dim_color, self.geo_feat_dim))
             self.color_net = tcnn.Network(
                 n_input_dims=in_dim_color,
-                n_output_dims=self.geo_feat_dim, #3,
+                n_output_dims=self.geo_feat_dim*2, #3,
                 network_config={
                     "otype": "CutlassMLP",
                     #"otype": "FullyFusedMLP",                    
@@ -277,7 +277,7 @@ class KPlanesField(Field):
             density_before_activation = self.sigma_net(features).view(*ray_samples.frustums.shape, -1)
         else:
             features = self.sigma_net(features).view(*ray_samples.frustums.shape, -1)
-            features, density_before_activation = torch.split(features, [self.geo_feat_dim, 1], dim=-1) #1], dim=-1)
+            features, density_before_activation = torch.split(features, [2*self.geo_feat_dim, 1], dim=-1) #1], dim=-1)
 
         # Rectifying the density with an exponential is much more stable than a ReLU or
         # softplus, because it enables high post-activation (float32) density outputs
@@ -319,7 +319,7 @@ class KPlanesField(Field):
             #sq_size = np.sqrt(size)
             #print(size,sq_size)
 
-            color_features = [d, density_embedding.reshape(-1, self.geo_feat_dim)]
+            color_features = [d, density_embedding.reshape(-1, 2*self.geo_feat_dim)]
             #color_features = [density_embedding.view(-1, self.geo_feat_dim)]
             #color_features = density_embedding.view(-1, self.geo_feat_dim)            
             
