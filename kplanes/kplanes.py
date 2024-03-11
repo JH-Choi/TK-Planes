@@ -839,7 +839,10 @@ class KPlanesModel(Model):
             #    time_mask_loss += self.rgb_loss((_outputs[2][:,num_comps:]).reshape(-1,10,1),time_mask_alt)
             #    time_mask_loss += self.rgb_loss((_outputs[4][:,num_comps:]).reshape(-1,10,1),time_mask_alt)
             #    time_mask_loss += self.rgb_loss((_outputs[5][:,num_comps:]).reshape(-1,10,1),time_mask_alt)
-
+            field_grids = []
+            for field in self.fields:
+                for g in field.grids:
+                    field_grids.append(g.plane_coefs)
 
             #grid_norm = 0.0
             local_vol_tvs = 0.0
@@ -883,6 +886,16 @@ class KPlanesModel(Model):
             for val_mult,curr_vol_tv in zip(val_mults,local_vol_tvs_arr):
                 local_vol_tvs += curr_vol_tv * val_mult / total_val
 
+            for grids in field_grids:
+                for gidx1,gidx2 in [(0,6),(1,7),(3,8)]:
+                    g1 = grids[gidx1]
+                    g2 = grids[gidx2]
+                    g1 = g1.reshape(g1.shape[0],-1)
+                    g2 = g2.reshape(g2.shape[0],-1)
+                    g1 = g1.permute(1,0)
+                    g_comp = torch.matmul(g1,g2)
+                    local_vol_tvs += torch.abs(g_comp).mean()
+                
             select_loss = 0
             for select_vec in select_vecs:
                 continue
@@ -900,7 +913,7 @@ class KPlanesModel(Model):
             #loss_dict["camera_delts"] += (torch.abs(self.pos_diff[non_zero_idxs])*image_diff).mean()
             #loss_dict["camera_delts"] = (torch.abs(self.rot_angs*image_diff)).mean()
             #loss_dict["camera_delts"] += (torch.abs(self.pos_diff*image_diff)).mean()
-            #loss_dict["local_vol_tvs"] = 0.001*local_vol_tvs / 3
+            loss_dict["local_vol_tvs"] = 0.001*local_vol_tvs / 3
             #loss_dict["select_loss"] = 0.001*select_loss / 3
             #loss_dict["grid_norm"] = 0.01*grid_norm / (6*len(outputs_lst))
             

@@ -630,10 +630,11 @@ class KPlanesEncoding(Encoding):
         super().__init__(in_dim=len(resolution))
 
         self.resolution = resolution
-        self.resolution_dyn = [resolution[0] // 4, resolution[1] // 4, resolution[2] // 4, resolution[3]]
+        dyn_divisor = 8
+        self.resolution_dyn = [resolution[0] // dyn_divisor, resolution[1] // dyn_divisor, resolution[2] // dyn_divisor, resolution[3]]
         self.num_components = num_components
         self.select_dim = select_dim
-        self.select_dim_dyn = select_dim // 4
+        self.select_dim_dyn = select_dim // dyn_divisor
         self.reduce = reduce
         if self.in_dim not in {3, 4}:
             raise ValueError(
@@ -642,8 +643,9 @@ class KPlanesEncoding(Encoding):
             )
         has_time_planes = self.in_dim == 4
         self.proc_coef_counter = 0
-        self.proc_coef_limit = 1000
-        self.run_coef_proc = True
+        self.proc_coef_limit = 10000
+        self.run_coef_proc = False
+        self.means = None
         self.dynamo = False
         self.proc_func = torch.nn.Identity()
         #self.proc_func = torch.nn.Tanh()
@@ -701,7 +703,7 @@ class KPlanesEncoding(Encoding):
                 #with torch.no_grad():
                 #    new_plane_coef = new_plane_coef*100
                 #nn.init.uniform_(new_plane_coef, a=init_a, b=init_b)
-                nn.init.uniform_(new_plane_coef, a=0.2, b=0.9)
+                nn.init.uniform_(new_plane_coef, a=0.0, b=0.2)
                 #nn.init.normal_(new_plane_coef, 0, 0.5)
             #elif coo_idx > 5:
             #    nn.init.uniform_(new_plane_coef, a=-0.1, b=0.1)
@@ -730,7 +732,9 @@ class KPlanesEncoding(Encoding):
             nn.ReLU(),            
             nn.Linear(total_comps*2, out_comps, bias=bias_bool))
         '''
-
+        #self.select_dim *= 2
+        #self.select_dim_dyn *= 32
+        
     def process_feature_coefs(self):
         with torch.no_grad():
             for gidx,grid in enumerate(self.plane_coefs):
@@ -836,7 +840,13 @@ class KPlanesEncoding(Encoding):
     def process_feature_coefs3(self):
         num_iters = 3
         with torch.no_grad():
-            
+            if self.means is None:
+                self.means = []
+                for gidx in range(len(self.plane_coefs)):
+                    bin_num = self.select_dim
+                    if gidx in [2,4,5,6,7,8]:
+                        bin_num = self.select_dim_dyn                    
+                    self.means.append(torch.zeros(bin_num,self.plane_coefs[gidx].shape[0]).to(self.plane_coefs[0].device))
             for gidx,grid in enumerate(self.plane_coefs):
                 bin_num = self.select_dim
                 if gidx in [2,4,5,6,7,8]:
@@ -844,13 +854,102 @@ class KPlanesEncoding(Encoding):
                 #print('GRID {}/{} PROCESSING'.format(gidx+1,len(self.plane_coefs)))
                 grid_r = grid.reshape(grid.shape[0],-1).permute(1,0)
                 sets = [set() for _ in range(bin_num)]
-                means = torch.zeros((bin_num,grid_r.shape[-1])).to(grid.device)
+
                 bins = self.calc_bins2(grid_r,bin_num)
                 init_indices = [i for i in range(grid_r.shape[0])]
                 random.shuffle(init_indices)
                 for bidx,bin in enumerate(bins):
                     sets[bidx].update(init_indices[bin[0]:bin[1]+1])
-                    means[bidx] = grid_r[bin[0]:bin[1]+1].mean(0)
+                    self.means[gidx][bidx] = grid_r[bin[0]:bin[1]+1].mean(0)
+
+                for nitdx in range(num_iters):
+                    #print("{} kmeans iter of {}".format(1+nitdx,num_iters))
+                    new_sets = [set() for _ in range(bin_num)]
+                    for setidx, curr_set in enumerate(sets):
+                        curr_set_list = list(curr_set)
+                        dists = torch.sqrt(torch.sum((grid_r[curr_set_list].unsqueeze(1) - self.means[gidx].unsqueeze(0))**2,dim=-1))
+                        best_sets = torch.argmin(dists,dim=-1)
+                        for sidx, xidx in enumerate(curr_set_list):
+                            #dists = torch.sqrt(torch.sum((grid_r[xidx] - means)**2,dim=1))
+                            #best_set = torch.argmin(dists)
+                            new_sets[best_sets[sidx]].add(xidx)
+
+                    for cidx,curr_set in enumerate(new_sets):
+                        if len(curr_set) > 0:
+                            self.means[gidx][cidx] = grid_r[list(curr_set)].mean(0)
+                        else:
+                            self.means[gidx][cidx] = grid_r[random.randint(0,grid_r.shape[0]-1)]
+                    sets = new_sets
+
+                #num_zero_sets = 0
+                for cidx,curr_set in enumerate(sets):
+                    if len(curr_set) > 0:
+                        grid_r[list(curr_set)] = self.means[gidx][cidx]
+                    #if len(curr_set) == 0:
+                    #    num_zero_sets += 1
+
+                #if num_zero_sets > 0:
+                    #print("{} ZERO SETS OUT OF {}".format(num_zero_sets,bin_num))
+                self.plane_coefs[gidx] = grid_r.permute(1,0).reshape(grid.shape)
+
+    def process_feature_coefs4(self):
+        num_iters = 10
+        with torch.no_grad():
+
+            for gidx,grid in enumerate(self.plane_coefs):
+                bin_num = self.select_dim
+                if gidx in [2,4,5,6,7,8]:
+                    bin_num = self.select_dim_dyn
+                #print('GRID {}/{} PROCESSING'.format(gidx+1,len(self.plane_coefs)))
+                grid_r = grid.reshape(grid.shape[0],-1).permute(1,0)
+                grid_r_norm = grid_r / (torch.norm(grid_r,2,dim=1).unsqueeze(-1))
+                sets = [set() for _ in range(bin_num)]
+                means = torch.zeros(bin_num,self.plane_coefs[gidx].shape[0]).to(self.plane_coefs[0].device)
+                bins = self.calc_bins2(grid_r,bin_num)
+                init_indices = [i for i in range(grid_r.shape[0])]
+                random.shuffle(init_indices)
+
+                used_indices = set()
+                curr_set_idx = 0
+                #curr_seed = init_indices[0]
+                comp = torch.matmul(grid_r,grid_r.permute(1,0))
+                comp_s = torch.sum(comp,dim=1)
+                curr_seed = torch.argsort(comp_s)[-1].cpu().item()
+                init_set = set(init_indices)
+
+                while(len(init_set) > 0):
+                    num_needed = bins[curr_set_idx][1] - bins[curr_set_idx][0]
+                    
+                    curr_set = sets[curr_set_idx]
+                    #used_indices.add(curr_seed)
+                    curr_vec = grid_r_norm[curr_seed]
+                    init_set_lst = torch.tensor(list(init_set))
+                    comps = torch.matmul(grid_r_norm[init_set_lst],curr_vec)
+                    comp_sorts = torch.argsort(comps)
+                    comp_lst = [cx.item() for cx in comp_sorts[:num_needed].cpu()]
+                    init_selection = [cx.item() for cx in init_set_lst[comp_lst]] 
+                    curr_set.update(init_selection)
+                    used_indices.update(init_selection)
+                    #curr_set.add(curr_seed)
+                    #while(len(curr_set) < num_needed):
+                    #    curr_idx = comp_sorts[0].cpu().item()
+                    #    comp_sorts = comp_sorts[1:]
+                    #    if curr_idx not in used_indices:
+                    #        curr_set.add(curr_idx)
+                    #        used_indices.add(curr_idx)
+                    #print(num_needed,len(init_set),len(curr_set),len(used_indices))
+                    #print(used_indices)
+                    #exit(-1)
+                    curr_set_idx += 1
+                    init_set = init_set - used_indices
+
+                    if len(init_set) > 0:
+                        #curr_seed = list(init_set)[0]
+                        init_set_lst = list(init_set)
+                        curr_seed = init_set_lst[torch.argsort(torch.sum(torch.matmul(grid_r[init_set_lst],grid_r[init_set_lst].permute(1,0)),dim=1))[-1].cpu().item()]
+                
+                for bidx,curr_set in enumerate(sets):
+                    means[bidx] = grid_r[list(curr_set)[random.randint(0,len(curr_set)-1)]]#.mean(0)
 
                 for nitdx in range(num_iters):
                     #print("{} kmeans iter of {}".format(1+nitdx,num_iters))
@@ -858,6 +957,8 @@ class KPlanesEncoding(Encoding):
                     for setidx, curr_set in enumerate(sets):
                         curr_set_list = list(curr_set)
                         dists = torch.sqrt(torch.sum((grid_r[curr_set_list].unsqueeze(1) - means.unsqueeze(0))**2,dim=-1))
+                        #if setidx == 0:
+                        #    print(torch.min(dists),torch.max(dists))
                         best_sets = torch.argmin(dists,dim=-1)
                         for sidx, xidx in enumerate(curr_set_list):
                             #dists = torch.sqrt(torch.sum((grid_r[xidx] - means)**2,dim=1))
@@ -868,18 +969,19 @@ class KPlanesEncoding(Encoding):
                         if len(curr_set) > 0:
                             means[cidx] = grid_r[list(curr_set)].mean(0)
                         else:
-                            means[cidx] = 0
+                            means[cidx] = grid_r[random.randint(0,grid_r.shape[0]-1)]
                     sets = new_sets
-
+                #exit(-1)
                 #num_zero_sets = 0
                 for cidx,curr_set in enumerate(sets):
-                    grid_r[list(curr_set)] = means[cidx]
+                    if len(curr_set) > 0:
+                        grid_r[list(curr_set)] = means[cidx]
                     #if len(curr_set) == 0:
                     #    num_zero_sets += 1
 
                 #if num_zero_sets > 0:
                     #print("{} ZERO SETS OUT OF {}".format(num_zero_sets,bin_num))
-                self.plane_coefs[gidx] = grid_r.permute(1,0).reshape(grid.shape)
+                self.plane_coefs[gidx].copy_(grid_r.permute(1,0).reshape(grid.shape))
 
     def calc_bins2(self,x,bin_num):
         diff = x.shape[0] // (bin_num)
@@ -888,7 +990,7 @@ class KPlanesEncoding(Encoding):
             if i < bin_num - 1:
                 bins.append([i*diff,(i+1)*diff])
             else:
-                bins.append([i*diff,x.shape[0]-1])
+                bins.append([i*diff,x.shape[0]])
         return bins
                 
     def get_out_dim(self) -> int:
@@ -904,7 +1006,7 @@ class KPlanesEncoding(Encoding):
         self.proc_coef_counter = (self.proc_coef_counter + 1) % self.proc_coef_limit
 
         if self.proc_coef_counter == 0 and self.run_coef_proc:
-            self.process_feature_coefs3()
+            self.process_feature_coefs4()
             #print('DONE PROCESSING')
         
         assert any(self.coo_combs)
@@ -1007,7 +1109,7 @@ class KPlanesEncoding(Encoding):
         xyz_static = (outputs[0]*outputs[1]*outputs[3])        
         xyz_temporal = (outputs[2]*outputs[4]*outputs[5]*outputs[6]*outputs[7]*outputs[8])
         #xyz_select = selection_func(xyz_static * xyz_temporal *100000,**select_kwargs)
-        xyz_select = selection_func(xyz_static * xyz_temporal,**select_kwargs)
+        #xyz_select = selection_func(xyz_static * xyz_temporal,**select_kwargs)
         xyz_select = torch.cat([xyz_static,xyz_temporal],dim=-1)
 
         #xyz_temporal = time_selection_func(xyz_temporal)
