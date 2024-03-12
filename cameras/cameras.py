@@ -760,10 +760,10 @@ class Cameras(TensorDataclass):
         if self.booly:
             #self.fx[:,:] = 801.3665 #exp1
             #self.fy[:,:] = 835.0484 #exp1
-            self.fx[:,:] = 777.9331 #exp2
-            self.fy[:,:] = 782.9447 #exp2
-            #self.fx[:,:] = 968.3066 #exp3
-            #self.fy[:,:] = 601.6100 #exp3
+            #self.fx[:,:] = 777.9331 #exp2
+            #self.fy[:,:] = 782.9447 #exp2
+            self.fx[:,:] = 968.3066 #exp3
+            self.fy[:,:] = 601.6100 #exp3
             
         #self.fx[:,:] = 801.3665
         #self.fy[:,:] = 835.0484
