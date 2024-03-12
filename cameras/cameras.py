@@ -434,9 +434,10 @@ class Cameras(TensorDataclass):
         # is None. In this case we append (h, w) to the num_rays dimensions for all tensors. In this case,
         # each image in camera_indices has to have the same shape since otherwise we would have error'd when
         # we checked keep_shape is valid or we aren't jagged.
-        booly = False
+        self.booly = False
         coords_lst = None
         if coords is None:
+            self.booly = True
             coords_lst = []
             #dim_delts = [0,4,4,4]
             #dim_delts = [0,4,6,7]            
@@ -756,13 +757,13 @@ class Cameras(TensorDataclass):
         x = coords[..., 1]  # (num_rays,) get rid of the last dimension
 
 
-        #if self.booly:
-        #self.fx[:,:] = 801.3665 #exp1
-        #self.fy[:,:] = 835.0484 #exp1
-        self.fx[:,:] = 777.9331 #exp2
-        self.fy[:,:] = 782.9447 #exp2
-        #self.fx[:,:] = 968.3066 #exp3
-        #self.fy[:,:] = 601.6100 #exp3
+        if self.booly:
+            #self.fx[:,:] = 801.3665 #exp1
+            #self.fy[:,:] = 835.0484 #exp1
+            self.fx[:,:] = 777.9331 #exp2
+            self.fy[:,:] = 782.9447 #exp2
+            #self.fx[:,:] = 968.3066 #exp3
+            #self.fy[:,:] = 601.6100 #exp3
             
         #self.fx[:,:] = 801.3665
         #self.fy[:,:] = 835.0484
