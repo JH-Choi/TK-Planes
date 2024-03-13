@@ -143,8 +143,8 @@ kplanes_dynamic_method = MethodSpecification(
                 is_contracted=False,
                 proposal_net_args_list=[
                     # time-resolution should be half the time-steps
-                    {"num_output_coords": 8, "resolution": [128, 128, 64, 77]},
-                    {"num_output_coords": 8, "resolution": [256, 256, 128, 77]},
+                    {"num_output_coords": 8, "resolution": [128, 128, 64, 15]},
+                    {"num_output_coords": 8, "resolution": [256, 256, 128, 15]},
                 ],
                 num_proposal_samples=(64,64),
                 loss_coefficients={
