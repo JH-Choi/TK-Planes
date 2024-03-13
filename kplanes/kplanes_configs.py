@@ -133,7 +133,7 @@ kplanes_dynamic_method = MethodSpecification(
             ),
             model=KPlanesModelConfig(
                 eval_num_rays_per_chunk=1 << 15,
-                grid_base_resolution=[128, 128, 64, 77],  # time-resolution should be half the time-steps
+                grid_base_resolution=[128, 128, 64, 15], #77],  # time-resolution should be half the time-steps
                 grid_feature_dim=32,
                 near_plane=5,
                 far_plane=350,
