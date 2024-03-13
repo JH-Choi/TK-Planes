@@ -390,10 +390,11 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
         self.actual_height = 720 #// 2
         self.actual_width = 1280 #// 2
         num_height = self.actual_height // self.patch_size[0]
-        num_width = self.actual_width // self.patch_size[1]        
+        num_width = self.actual_width // self.patch_size[1]
+        self.num_images = 30
         self.img_repeat_num = 1 #(num_height + 1) * (num_width + 1)
         #for i in range(153):
-        for i in range(30): #150):            
+        for i in range(self.num_images): #150):            
             temp_lst = []
             for j in range(self.img_repeat_num):
                 temp_lst.append(i)
@@ -569,7 +570,7 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
                 self.select_idxs = [] #i for i in range(153)]
                 top_lst = []
                 #for i in range(153):
-                for i in range(30): #150):                    
+                for i in range(self.num_images): #150):                    
                     temp_lst = []
                     for j in range(self.img_repeat_num):
                         temp_lst.append(i)
@@ -581,7 +582,7 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
 
             curr_select_idxs = self.select_idxs[:self.num_to_select]
             self.select_idxs = self.select_idxs[self.num_to_select:]
-            select = torch.zeros(153,device=self.indices[0].device).to(bool)
+            select = torch.zeros(self.num_images,device=self.indices[0].device).to(bool)
             select[curr_select_idxs] = True
             curr_dim = self.patch_size #self.init_dim * 2
             indices = []
