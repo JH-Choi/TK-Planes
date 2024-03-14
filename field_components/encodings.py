@@ -630,7 +630,7 @@ class KPlanesEncoding(Encoding):
         super().__init__(in_dim=len(resolution))
 
         self.resolution = resolution
-        dyn_divisor = 8
+        dyn_divisor = 1
         self.resolution_dyn = [resolution[0] // dyn_divisor, resolution[1] // dyn_divisor, resolution[2] // dyn_divisor, resolution[3]]
         self.num_components = num_components
         self.select_dim = select_dim
