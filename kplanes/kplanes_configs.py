@@ -119,10 +119,10 @@ kplanes_dynamic_method = MethodSpecification(
     config=TrainerConfig(
         method_name="kplanes-dynamic",
         gradient_accumulation_steps=1,
-        steps_per_eval_batch=3000001,
+        steps_per_eval_batch=1000001,
         steps_per_save=100,
-        steps_per_eval_all_images=3000001,
-        max_num_iterations=3000001,
+        steps_per_eval_all_images=1000001,
+        max_num_iterations=1000001,
         mixed_precision=True,
         pipeline=VanillaPipelineConfig(
             datamanager=VanillaDataManagerConfig(
@@ -134,8 +134,8 @@ kplanes_dynamic_method = MethodSpecification(
                 train_num_rays_per_batch=4196 + 1024,
                 eval_num_rays_per_batch=1,
                 camera_res_scale_factor=1.0,  
-                patch_size=[72,64],
-                #patch_size=[144,128],
+                #patch_size=[72,64],
+                patch_size=[144,128],
                 #patch_size=[144,160],                
                 #patch_size=[240,256],                
                 #patch_size=[240,320],
@@ -143,11 +143,11 @@ kplanes_dynamic_method = MethodSpecification(
             model=KPlanesModelConfig(
                 eval_num_rays_per_chunk=1 << 2,
                 #grid_base_resolution=[8, 8, 8, 77],  # time-resolution should be half the time-steps
-                grid_base_resolution=[32, 32, 32, 77],  # time-resolution should be half the time-steps                
-                grid_feature_dim=256,
+                grid_base_resolution=[8, 8, 8, 20],  # time-resolution should be half the time-steps                
+                grid_feature_dim=128,
                 grid_select_dim=64,
-                patch_size=[72,64],
-                #patch_size=[144,128],
+                #patch_size=[72,64],
+                patch_size=[144,128],
                 #patch_size=[144,160],                
                 #patch_size=[240,256],                
                 #patch_size=[240,320], 
@@ -183,12 +183,12 @@ kplanes_dynamic_method = MethodSpecification(
             #    "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=100000),
             #},
             "fields": {
-                "optimizer": AdamOptimizerConfig(lr=1e-5, eps=1e-12),
-                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=3000000),
+                "optimizer": AdamOptimizerConfig(lr=1e-4, eps=1e-12),
+                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=1000000),
             },
             "decoder": {
-                "optimizer": AdamOptimizerConfig(lr=1e-5, eps=1e-12),
-                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=3000000),
+                "optimizer": AdamOptimizerConfig(lr=2e-5, eps=1e-12),
+                "scheduler": CosineDecaySchedulerConfig(warm_up_end=512, max_steps=1000000),
             },
             #"ray_bundle_encoder": {
             #    "optimizer": AdamOptimizerConfig(lr=1e-5, eps=1e-12),

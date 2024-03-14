@@ -391,7 +391,7 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
         self.actual_width = 1280 #// 2
         num_height = self.actual_height // self.patch_size[0]
         num_width = self.actual_width // self.patch_size[1]
-        self.num_images = 150
+        self.num_images = 15
         self.img_repeat_num = 1 #(num_height + 1) * (num_width + 1)
         #for i in range(153):
         for i in range(self.num_images): #150):            
