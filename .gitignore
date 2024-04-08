@@ -1,0 +1,7 @@
+# pycache
+*.pyc
+
+# pip egg info
+*.egg-info
+
+outputs/

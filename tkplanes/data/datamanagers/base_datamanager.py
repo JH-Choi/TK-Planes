@@ -50,24 +50,36 @@ from nerfstudio.configs.base_config import InstantiateConfig
 from nerfstudio.configs.dataparser_configs import AnnotatedDataParserUnion
 from nerfstudio.data.dataparsers.base_dataparser import DataparserOutputs
 from nerfstudio.data.dataparsers.blender_dataparser import BlenderDataParserConfig
-from nerfstudio.data.datasets.base_dataset import InputDataset
-from nerfstudio.data.pixel_samplers import (
-    EquirectangularPixelSampler,
-    PatchPixelSampler,
-    TieredFeaturePatchPixelSampler,
-    PixelSampler,
-)
-from nerfstudio.data.utils.dataloaders import (
-    CacheDataloader,
-    FixedIndicesEvalDataloader,
-    RandIndicesEvalDataloader,
-)
+# from nerfstudio.data.datasets.base_dataset import InputDataset
+# from nerfstudio.data.pixel_samplers import (
+#     EquirectangularPixelSampler,
+#     PatchPixelSampler,
+#     TieredFeaturePatchPixelSampler,
+#     PixelSampler,
+# )
+# from nerfstudio.data.utils.dataloaders import (
+#     CacheDataloader,
+#     FixedIndicesEvalDataloader,
+#     RandIndicesEvalDataloader,
+# )
 from nerfstudio.data.utils.nerfstudio_collate import nerfstudio_collate
 from nerfstudio.engine.callbacks import TrainingCallback, TrainingCallbackAttributes
 from nerfstudio.model_components.ray_generators import RayGenerator
 from nerfstudio.utils.misc import IterableWrapper
 from nerfstudio.utils.rich_utils import CONSOLE
 
+from tkplanes.data.datasets.base_dataset import InputDataset
+from tkplanes.data.pixel_samplers import (
+    EquirectangularPixelSampler,
+    PatchPixelSampler,
+    TieredFeaturePatchPixelSampler,
+    PixelSampler,
+)
+from tkplanes.data.utils.dataloaders import (
+    CacheDataloader,
+    FixedIndicesEvalDataloader,
+    RandIndicesEvalDataloader,
+)
 
 def variable_res_collate(batch: List[Dict]) -> Dict:
     """Default collate function for the cached dataloader.
@@ -105,7 +117,6 @@ class DataManagerConfig(InstantiateConfig):
     After instantiation, data manager holds both train/eval datasets and is in charge of returning unpacked
     train/eval data at each iteration
     """
-
     _target: Type = field(default_factory=lambda: DataManager)
     """Target class to instantiate."""
     data: Optional[Path] = None
@@ -399,8 +410,9 @@ class VanillaDataManager(DataManager, Generic[TDataset]):
         self.train_dataset = self.create_train_dataset()
         self.eval_dataset = self.create_eval_dataset()
         self.exclude_batch_keys_from_device = self.train_dataset.exclude_batch_keys_from_device
-        if self.config.masks_on_gpu is True:
-            self.exclude_batch_keys_from_device.remove("mask")
+        # TODO
+        # if self.config.masks_on_gpu is True:
+        #     self.exclude_batch_keys_from_device.remove("mask")
 
         if self.train_dataparser_outputs is not None:
             cameras = self.train_dataparser_outputs.cameras
