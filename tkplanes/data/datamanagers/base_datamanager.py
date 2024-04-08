@@ -44,7 +44,7 @@ from torch.utils.data.distributed import DistributedSampler
 from typing_extensions import TypeVar
 
 from nerfstudio.cameras.camera_optimizers import CameraOptimizerConfig
-from nerfstudio.cameras.cameras import CameraType
+#from nerfstudio.cameras.cameras import CameraType
 from nerfstudio.cameras.rays import RayBundle
 from nerfstudio.configs.base_config import InstantiateConfig
 from nerfstudio.configs.dataparser_configs import AnnotatedDataParserUnion
@@ -64,10 +64,12 @@ from nerfstudio.data.dataparsers.blender_dataparser import BlenderDataParserConf
 # )
 from nerfstudio.data.utils.nerfstudio_collate import nerfstudio_collate
 from nerfstudio.engine.callbacks import TrainingCallback, TrainingCallbackAttributes
-from nerfstudio.model_components.ray_generators import RayGenerator
+#from nerfstudio.model_components.ray_generators import RayGenerator
 from nerfstudio.utils.misc import IterableWrapper
 from nerfstudio.utils.rich_utils import CONSOLE
 
+from tkplanes.cameras.cameras import CameraType
+from tkplanes.model_components.ray_generators import RayGenerator
 from tkplanes.data.datasets.base_dataset import InputDataset
 from tkplanes.data.pixel_samplers import (
     EquirectangularPixelSampler,

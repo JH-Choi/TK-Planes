@@ -383,7 +383,8 @@ class TieredFeaturePatchPixelSampler(PixelSampler):
         self.num_tiers = kwargs["num_tiers"]
         self.feature_patch_size = kwargs["feature_patch_size"]
 
-        self.centers = json.load(open("Okutama/data/practice_set9/centers.json","r"))
+        # self.centers = json.load(open("Okutama/data/practice_set9/centers.json","r"))
+        self.centers = json.load(open("/mnt/hdd/data/Okutama_Action/Chris_data/1.1.1/training_set/train/centers.json","r"))
         
         self.select_idxs = [] #[i for i in range(153)]
         top_lst = []

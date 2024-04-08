@@ -59,13 +59,14 @@ from nerfstudio.model_components.ray_samplers import (
 #     FeatureRenderer
 # )
 from nerfstudio.model_components.scene_colliders import NearFarCollider
-from nerfstudio.models.base_model import Model, ModelConfig
+# from nerfstudio.models.base_model import Model, ModelConfig
 from nerfstudio.utils import colormaps, misc
 
 from .kplanes_field import KPlanesDensityField, KPlanesField
 from .LimitGradLayer import LimitGradLayer
 from .decoder import ImageDecoder, conv3x3, conv2x2, conv1x1
 from tkplanes.model_components.renderers import FeatureRenderer
+from tkplanes.models.base_model import Model, ModelConfig
 
 @dataclass
 class KPlanesModelConfig(ModelConfig):

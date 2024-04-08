@@ -19,9 +19,11 @@ from jaxtyping import Int
 from torch import Tensor, nn
 import torch
 from nerfstudio.cameras.camera_optimizers import CameraOptimizer
-from nerfstudio.cameras.cameras import Cameras
+# from nerfstudio.cameras.cameras import Cameras
 from nerfstudio.cameras.rays import RayBundle
 
+from tkplanes.cameras.cameras import Cameras
+import pdb
 
 class RayGenerator(nn.Module):
     """torch.nn Module for generating rays.
@@ -59,6 +61,7 @@ class RayGenerator(nn.Module):
         camera_opt_to_camera = self.pose_optimizer(c)
         #print('BLOOPS: {}'.format(ray_indices[:,1:]))
         #print('BLEEPS: {}'.format(coords))
+        
         ray_bundle = self.cameras.generate_rays(
             camera_indices=c.unsqueeze(-1),
             coords=coords,
